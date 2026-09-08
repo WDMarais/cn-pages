@@ -45,6 +45,76 @@ body.show-py .pc-py { display: block; }
 }
 .vignette figcaption b { color: var(--navy); font-weight: 700; }
 
+/* ── At-a-glance 速查: cheat-sheet table + quick-pattern crib ── */
+/* This section is a deliberate escape hatch from the page's listen-first
+   toggles — pinyin and English stay ON here, because a crib is for glancing. */
+.crib-intro {
+  font-size: 0.72rem; color: var(--muted); font-style: italic;
+  margin-bottom: 1rem;
+}
+.crib-wrap { overflow-x: auto; margin-bottom: 2rem; }
+.crib-table {
+  width: 100%; border-collapse: collapse; font-size: 0.92rem;
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden;
+}
+.crib-table th {
+  text-align: left; font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase;
+  font-weight: 700; color: var(--muted); padding: 0.7rem 0.9rem;
+  border-bottom: 2px solid var(--border); background: var(--cream);
+}
+.crib-cat td {
+  font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; font-weight: 700;
+  color: var(--gold); padding: 0.85rem 0.9rem 0.35rem;
+  border-bottom: 1px solid var(--border);
+}
+.crib-cat td b { color: var(--navy); font-size: 0.82rem; letter-spacing: 0; text-transform: none; }
+.crib-table td { padding: 0.5rem 0.9rem; border-bottom: 1px solid var(--border); vertical-align: baseline; }
+.crib-table tr:last-child td { border-bottom: none; }
+.crib-zi {
+  font-family: 'KaiTi','STKaiti','Noto Serif CJK SC',serif;
+  font-size: 1.4rem; font-weight: 700; color: var(--navy); white-space: nowrap;
+}
+.crib-py  { color: var(--red); font-size: 0.82rem; white-space: nowrap; }
+.crib-en  { color: var(--ink); }
+.crib-zh  { color: var(--muted); font-size: 0.82rem; }
+
+.crib-patterns {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 0.9rem;
+}
+.crib-card {
+  background: white; border: 1px solid var(--border); border-radius: 10px;
+  border-top: 3px solid var(--gold); padding: 0.95rem 1.1rem;
+}
+.crib-card h3 {
+  margin: 0 0 0.45rem; font-size: 1.05rem; color: var(--navy); font-weight: 700;
+}
+.crib-card h3 .py { color: var(--red); font-size: 0.72rem; font-weight: 600; margin-left: 0.4rem; }
+.crib-card p { margin: 0; font-size: 0.84rem; line-height: 1.55; color: var(--ink); }
+.crib-card .vs { color: var(--muted); }
+.crib-card b.pos { color: var(--green); }
+.crib-card b.neg { color: var(--red); }
+.crib-card .eg { display: block; margin-top: 0.5rem; font-size: 0.8rem; color: var(--muted); }
+
+/* ── Animated stroke strip (米字格 tiles, HanziWriter) ──── */
+.stroke-strip {
+  display: flex; flex-wrap: wrap; gap: 0.9rem; justify-content: center;
+  margin: 1.75rem 0 0.5rem;
+}
+.sw-tile { text-align: center; }
+.sw-grid {
+  position: relative; width: 92px; height: 92px; margin: 0 auto;
+  background: white; border: 1px solid var(--border); border-radius: 6px;
+  cursor: pointer;
+}
+.sw-grid svg.mz { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.sw-hw { position: absolute; inset: 0; }
+.sw-label {
+  margin-top: 0.45rem; font-size: 0.82rem; color: var(--navy); font-weight: 700;
+}
+.sw-label .sw-py { color: var(--red); font-weight: 600; font-size: 0.72rem; margin-left: 0.15rem; }
+.stroke-hint { text-align: center; font-size: 0.72rem; color: var(--muted); font-style: italic; margin-top: 0.35rem; }
+
 /* ── Practice-passage label (real 课文 slots in later) ── */
 .passage-note {
   font-size: 0.72rem; color: var(--muted); font-style: italic;

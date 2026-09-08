@@ -50,6 +50,58 @@
 </section>
 
 
+<!-- ── 1b. At-a-glance crib / cheat sheet ───────── -->
+<section class="bg-white">
+  <div class="wrap">
+    <div class="sec-label"><span class="en">At a Glance</span><span class="zh-alt">速查表</span></div>
+    <h2>一眼看完：十三个词</h2>
+    <div class="sec-rule"></div>
+    <p class="crib-intro"><span class="en">The whole set on one screen — pinyin and English stay on here, for glancing during class. The sections below turn them off so you can practise listening.</span><span class="zh-alt">全部词汇一屏看完——这里拼音和英文一直开着，方便课上速查。下面各节会关掉，好让你练听力。</span></p>
+
+    <div class="crib-wrap">
+      <table class="crib-table">
+        <thead>
+          <tr>
+            <th>字 / 词</th>
+            <th>Pīnyīn</th>
+            <th><span class="en">Meaning</span><span class="zh-alt">意思</span></th>
+            <th class="crib-zh-head">中文</th>
+          </tr>
+        </thead>
+        <tbody id="crib-body"></tbody>
+      </table>
+    </div>
+
+    <div class="crib-patterns">
+      <div class="crib-card">
+        <h3>V 得/不 R<span class="py">de / bu</span></h3>
+        <p><b class="pos">听得懂</b> = able to <span class="vs">·</span> <b class="neg">听不懂</b> = unable. Slot 得/不 between verb and result.<span class="eg">看得懂 · 做得完 · 买不到</span></p>
+      </div>
+      <div class="crib-card">
+        <h3>听不懂 <span class="vs">≠</span> 没听懂</h3>
+        <p><b class="neg">听不懂</b> = can't understand (no ability). <b>没听懂</b> = didn't catch it <i>this time</i>.</p>
+      </div>
+      <div class="crib-card">
+        <h3>第 + 数<span class="py">dì</span></h3>
+        <p>Makes an ordinal: 三 = three <span class="vs">→</span> <b>第三</b> = the third. Count vs. rank.<span class="eg">第一 · 第五节课</span></p>
+      </div>
+      <div class="crib-card">
+        <h3>告诉 + 人<span class="py">gàosu</span></h3>
+        <p>Always takes a listener: <b>告诉我</b>／你／老师. Unlike 说, which needs no object.<span class="eg">告诉 + 某人 + 某事</span></p>
+      </div>
+      <div class="crib-card">
+        <h3>哪里<span class="py">nǎlǐ</span></h3>
+        <p>= where? <span class="vs">·</span> Doubled as a modest reply: 「<b>哪里哪里</b>」= "you flatter me."<span class="eg">在哪里？ · —你写得真好！—哪里哪里。</span></p>
+      </div>
+      <div class="crib-card">
+        <h3>就是<span class="py">jiùshì</span></h3>
+        <p>= exactly, that's it. Alone: 「就是！」= "right?!" <b>就是说</b> = in other words.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+
 <!-- ── 2. Understanding & telling ───────────────── -->
 <section>
   <div class="wrap">
@@ -206,6 +258,9 @@
       <figcaption><b>文房四宝</b> · <span class="en">brush, ink, paper, inkstone — the writing kit</span><span class="zh-alt">笔墨纸砚，写字的家伙</span></figcaption>
     </figure>
 
+    <div class="stroke-strip" id="stroke-strip" role="group" aria-label="笔顺动画：汉 字 书 法 写 练"></div>
+    <div class="stroke-hint"><span class="en">Tap a character to watch its stroke order again.</span><span class="zh-alt">点一下汉字，再看一遍笔顺。</span></div>
+
     <div class="grid" id="cards-writing"></div>
 
     <figure class="vignette">
@@ -344,5 +399,97 @@
 
 <script src="../shared/base.js"></script>
 <script src="../shared/lesson.js"></script>
+<script src="../shared/vendor/hanzi-writer.min.js"></script>
+<script>
+/* Animated stroke-order strip for the four writing words' characters. Self-hosted:
+   lib in shared/vendor, per-char APL data in shared/hanzi-data. Kept self-contained
+   (not cards3.js) so this bespoke page carries no graph-deck machinery. Viewport-gated
+   and reduced-motion-aware, mirroring the grid pages' HanziWriter lifecycle. */
+(function () {
+  if (typeof HanziWriter === 'undefined') { return; }
+  const strip = document.getElementById('stroke-strip');
+  if (!strip) { return; }
+  const CHARS = [
+    { c: '汉', py: 'hàn' }, { c: '字', py: 'zì' }, { c: '书', py: 'shū' },
+    { c: '法', py: 'fǎ' },  { c: '写', py: 'xiě' }, { c: '练', py: 'liàn' },
+  ];
+  const MZ = '<svg class="mz" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">'
+    + '<line x1="50" y1="4" x2="50" y2="96" stroke="#B8963E" stroke-width="0.8" stroke-dasharray="4,4" opacity="0.55"/>'
+    + '<line x1="4" y1="50" x2="96" y2="50" stroke="#B8963E" stroke-width="0.8" stroke-dasharray="4,4" opacity="0.55"/>'
+    + '<line x1="6" y1="6" x2="94" y2="94" stroke="#B8963E" stroke-width="0.6" stroke-dasharray="4,4" opacity="0.3"/>'
+    + '<line x1="94" y1="6" x2="6" y2="94" stroke="#B8963E" stroke-width="0.6" stroke-dasharray="4,4" opacity="0.3"/></svg>';
+  const navy = getComputedStyle(document.documentElement).getPropertyValue('--navy').trim() || '#1E2A4A';
+  const SZ = 92;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const writers = new Map();
+
+  CHARS.forEach(({ c, py }) => {
+    const tile = document.createElement('div');
+    tile.className = 'sw-tile';
+    tile.innerHTML = `<div class="sw-grid" role="button" tabindex="0" aria-label="${c} 笔顺">`
+      + `${MZ}<div class="sw-hw" data-char="${c}"></div></div>`
+      + `<div class="sw-label">${c}<span class="sw-py">${py}</span></div>`;
+    strip.appendChild(tile);
+    const target = tile.querySelector('.sw-hw');
+    const w = HanziWriter.create(target, c, {
+      width: SZ, height: SZ, padding: SZ * 0.08,
+      strokeColor: navy, outlineColor: '#D8D2C4', showOutline: true,
+      strokeAnimationSpeed: 1, delayBetweenStrokes: 220,
+      charDataLoader: (ch, done) => fetch(`../shared/hanzi-data/${ch}.json`).then(r => r.json()).then(done),
+    });
+    writers.set(target, w);
+    const grid = tile.querySelector('.sw-grid');
+    const replay = () => w.animateCharacter();
+    grid.addEventListener('click', replay);
+    grid.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); replay(); } });
+  });
+
+  // HanziWriter runs each loop on its own rAF with no offscreen culling, so gate the
+  // strip to the viewport: loop on approach, pause on exit.
+  if (!reduce) {
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        const w = writers.get(e.target);
+        if (!w) { return; }
+        if (e.isIntersecting) { w.loopCharacterAnimation(); } else { w.pauseAnimation(); }
+      });
+    }, { rootMargin: '80px' });
+    writers.forEach((_, el) => io.observe(el));
+  }
+})();
+</script>
+<script>
+/* Build the at-a-glance crib table from the same cards.json the sections use,
+   so the cheat sheet can never drift from the card content. */
+(function () {
+  const CATS = {
+    understand: { en: 'Hearing &amp; Understanding', zh: '听懂' },
+    writing:    { en: 'Characters &amp; Writing',    zh: '写字' },
+    grammar:    { en: 'Function Words',              zh: '功能词' },
+  };
+  const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  fetch('cards.json')
+    .then(r => r.json())
+    .then(data => {
+      const body = document.getElementById('crib-body');
+      if (!body) { return; }
+      let html = '';
+      Object.entries(data).forEach(([group, cards]) => {
+        if (!Array.isArray(cards)) { return; }
+        const cat = CATS[group] || { en: group, zh: group };
+        html += `<tr class="crib-cat"><td colspan="4"><b>${cat.zh}</b> · <span>${cat.en}</span></td></tr>`;
+        cards.forEach(c => {
+          html += `<tr>`
+            + `<td class="crib-zi">${esc(c.hanzi)}</td>`
+            + `<td class="crib-py">${esc(c.pinyin)}</td>`
+            + `<td class="crib-en">${esc(c.meaning)}</td>`
+            + `<td class="crib-zh">${esc(c.meaning_zh)}</td>`
+            + `</tr>`;
+        });
+      });
+      body.innerHTML = html;
+    });
+})();
+</script>
 </body>
 </html>

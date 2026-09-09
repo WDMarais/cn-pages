@@ -67,10 +67,10 @@
   .suggest { margin:.2rem 0 .3rem; }
   .suggest .row { gap:.4rem; }
   .sug-results { display:flex; flex-wrap:wrap; gap:.5rem; margin:.55rem 0 0; }
-  .sug { width:7.4rem; border:1px solid var(--line); border-radius:8px; background:var(--panel2);
+  .sug { width:9.6rem; border:1px solid var(--line); border-radius:8px; background:var(--panel2);
     padding:.35rem; cursor:pointer; position:relative; }
   .sug:hover { border-color:var(--accent); }
-  .sug img { width:100%; height:5rem; object-fit:contain; border-radius:5px; display:block;
+  .sug img { width:100%; height:6.5rem; object-fit:contain; border-radius:5px; display:block;
     background:repeating-conic-gradient(#2a2f3a 0% 25%, #222630 0% 50%) 50% / 12px 12px; }
   .sug .lic { font-size:10.5px; color:var(--accent); margin-top:.22rem; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; }
@@ -164,12 +164,14 @@
   <h2>images</h2>
   <div class="suggest">
     <div class="row">
-      <div><input id="sugQ" placeholder="search Wikimedia Commons for candidates…" autocomplete="off"></div>
-      <button class="btn grow0" id="sugBtn" onclick="runSuggest()">search Commons</button>
+      <div><input id="sugQ" placeholder="search free images (Openverse)…" autocomplete="off"></div>
+      <button class="btn grow0" id="sugBtn" onclick="runSuggest()">search images</button>
     </div>
-    <p class="hint">Free-licensed candidates to <b>start</b> from — click one to pre-fill a card, then
-      verify it (or bin it and use your own find). Only PD / CC0 / CC BY / CC BY-SA are shown; the query
-      seeds from the meaning, but your own wording is where the good, varied picks come from.</p>
+    <p class="hint">Candidates to <b>start</b> from, via <b>Openverse</b> (which searches Flickr,
+      Wikimedia Commons, museums &amp; more) — click one to pre-fill a card, then verify it (or bin it
+      and use your own find). Only commercially-reusable licences are shown and mature content is
+      excluded at the source; the query seeds from the meaning, but your own wording is where the good,
+      varied picks come from.</p>
     <div class="sug-results" id="sugResults"></div>
     <p class="sug-note" id="sugNote" hidden></p>
   </div>
@@ -221,29 +223,23 @@ const LICENSES = [
 ];
 const licOf = name => LICENSES.find(l => l.label === name);
 
-// ── Wikimedia Commons suggestions ────────────────────────────────────────────
-// A browser can't set User-Agent (forbidden header), so we identify per-author via
-// Api-User-Agent, which Commons allows for origin=* CORS. Each contributor's traffic
-// carries their own handle rather than one shared identity.
-const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
-function uaString() {
-  const h = ($('contributor')?.value || '').trim();
-  return `lang-pages-imagery-linker/0.1 (educational flashcards; contributor: ${h || 'anonymous'})`;
-}
-const stripTags = h => String(h||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
-// mirror fetch-referent.py::is_free — free-culture only, reject NC/ND/fair-use/ARR
-function isFreeLic(s) {
-  s = (s||'').toLowerCase().trim();
-  if (!s || ['-nc','-nd','fair use','all rights'].some(t => s.includes(t))) return false;
-  return s.startsWith('pd') || ['pdm','cc0','public domain','cc by','cc-by'].some(t => s.includes(t));
-}
-// Commons' LicenseShortName → this page's dropdown label (falls back to "(other)")
-function mapLicense(short) {
-  const s = (short||'').toLowerCase().trim();
-  if (s.includes('cc0')) return 'CC0';
-  if (s.startsWith('pd') || s.includes('public domain') || s === 'pdm') return 'Public Domain';
-  const hit = LICENSES.find(l => l.label.toLowerCase() === s);
-  return hit ? hit.label : '(other — enter URL)';
+// ── Openverse image suggestions ──────────────────────────────────────────────
+// Openverse aggregates Flickr, Wikimedia Commons, museums & more. We ask it, server
+// side, for only commercially-reusable + modifiable licences (license_type); it also
+// excludes results it has flagged sensitive by default (each result carries its own
+// unstable__sensitivity labels, which we double-check below). So the strip is safe and
+// correctly-licensed by construction, with no client-side keyword guessing. Keyless and
+// CORS-enabled; anonymous use is rate-limited (20/min, 200/day), which suits human-
+// paced curation — hand-sourcing stays the path for deeper hunts.
+const OPENVERSE_API = 'https://api.openverse.org/v1/images/';
+const FREE_CODES = new Set(['by','by-sa','cc0','pdm']);
+// Openverse licence code + version → this page's dropdown label (else "(other)")
+function mapOvLicense(code, ver) {
+  code = (code||'').toLowerCase(); ver = (ver||'').trim();
+  if (code === 'cc0') return 'CC0';
+  if (code === 'pdm') return 'Public Domain';
+  const label = (code === 'by' ? 'CC BY ' : code === 'by-sa' ? 'CC BY-SA ' : '') + ver;
+  return LICENSES.some(l => l.label === label) ? label : '(other — enter URL)';
 }
 const isStr = v => typeof v === 'string' && v.trim() !== '';
 const today = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
@@ -651,60 +647,54 @@ async function runSuggest() {
   note.hidden = true; out.innerHTML = '';
   try {
     const params = new URLSearchParams({
-      format:'json', origin:'*', action:'query',
-      generator:'search', gsrnamespace:'6', gsrlimit:'20', gsrsearch:q,
-      prop:'imageinfo', iiprop:'url|extmetadata|mime', iiurlwidth:'320',
+      q, license_type: 'commercial,modification', page_size: '24',
     });
-    const r = await fetch(COMMONS_API + '?' + params, { headers: { 'Api-User-Agent': uaString() } });
+    const r = await fetch(OPENVERSE_API + '?' + params);
+    if (r.status === 429) throw new Error('search limit reached — Openverse allows 200 searches/day for anonymous use; hand-source for now, or try later');
     if (!r.ok) throw new Error('HTTP ' + r.status);
     const d = await r.json();
-    const pages = Object.values((d.query && d.query.pages) || {});
-    pages.sort((a,b) => (a.index||0) - (b.index||0));
-    const OK = ['image/jpeg','image/png','image/gif','image/webp'];
-    let hiddenNonFree = 0; const cands = [];
-    for (const p of pages) {
-      const ii = (p.imageinfo || [])[0]; if (!ii || !OK.includes(ii.mime)) continue;
-      const meta = ii.extmetadata || {};
-      const lic = (meta.LicenseShortName || {}).value || '';
-      if (!isFreeLic(lic)) { hiddenNonFree++; continue; }
-      const mapped = mapLicense(lic);
+    const cands = [];
+    for (const it of (d.results || [])) {
+      if ((it.unstable__sensitivity || []).length) continue;   // Openverse's own sensitive flag (default already excludes these; guard anyway)
+      const code = (it.license || '').toLowerCase();
+      if (!FREE_CODES.has(code)) continue;   // belt-and-braces; the query already filters
+      const mapped = mapOvLicense(code, it.license_version);
       cands.push({
-        title:       stripTags((meta.ObjectName || {}).value) || p.title.replace(/^File:/,''),
-        source:      ii.descriptionurl || '',
-        _preview:    ii.thumburl || ii.url || '',
-        credit:      stripTags((meta.Artist || {}).value),
+        title:       (it.title || '').trim(),
+        source:      it.foreign_landing_url || '',
+        _preview:    it.thumbnail || it.url || '',
+        credit:      (it.creator || '').trim(),
         license:     mapped,
-        license_raw: lic,
-        license_url: (licOf(mapped) || {}).url || (meta.LicenseUrl || {}).value || '',
+        license_raw: code.toUpperCase() + (it.license_version ? ' ' + it.license_version : ''),
+        license_url: (licOf(mapped) || {}).url || it.license_url || '',
+        _from:       it.source || '',
       });
     }
-    SUG = cands; renderSuggest(hiddenNonFree, q);
+    SUG = cands; renderSuggest(q);
   } catch (e) {
     note.hidden = false; note.className = 'sug-note err';
-    note.textContent = `couldn’t reach Wikimedia Commons (${e.message}). Try again, or just add images by hand below.`;
+    note.textContent = `couldn’t search (${e.message}) — you can still add images by hand below.`;
   } finally { SUG_BUSY = false; btn.textContent = bt; btn.disabled = false; }
 }
-function renderSuggest(hiddenNonFree, q) {
+function renderSuggest(q) {
   const out = $('sugResults'), note = $('sugNote');
   if (!SUG.length) {
     out.innerHTML = ''; note.hidden = false; note.className = 'sug-note';
-    note.textContent = `no free-licensed results for “${q}”${hiddenNonFree?` (${hiddenNonFree} non-free hidden)`:''} — try different words, or add by hand.`;
+    note.textContent = `no free, safe-for-work results for “${q}” — try different words, or add by hand.`;
     return;
   }
+  note.hidden = true;
   out.innerHTML = SUG.map((c,i) => `
-    <div class="sug" data-i="${i}" title="${esc(c.title)} — ${esc(c.license_raw)}">
+    <div class="sug" data-i="${i}" title="${esc(c.title)} — ${esc(c.license_raw)}${c._from?` · via ${esc(c._from)}`:''}">
       <img loading="lazy" src="${esc(c._preview)}" alt="">
-      <div class="lic">${esc(c.license)}</div>
+      <div class="lic">${esc(c.license)}${c._from ? ` · ${esc(c._from)}` : ''}</div>
       <div class="cap">${esc(c.title)}</div>
     </div>`).join('');
-  if (hiddenNonFree) { note.hidden = false; note.className = 'sug-note';
-    note.textContent = `${hiddenNonFree} non-free result(s) hidden.`; }
-  else note.hidden = true;
 }
 function acceptSuggest(i) {
   const c = SUG[i]; if (!c) return;
   if (!$('slug').value.trim()) { alert('Pick a radical (or type a slug) first, so the image has a referent to attach to.'); return; }
-  const { license_raw, ...v } = c;   // license_raw is display-only, not a card field
+  const { license_raw, _from, ...v } = c;   // display-only fields, not card fields
   addImage(v);
   const el = document.querySelector(`.sug[data-i="${i}"]`); if (el) el.classList.add('added');
 }

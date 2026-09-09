@@ -51,8 +51,7 @@ with the wrong or missing credit is a *reject*, not a "fix later".
 Everything happens on one web page — the **imagery linker** — that the editor will
 send you a link to. No install, no terminal, nothing to set up: open the link in a
 normal browser. First thing, type your name/handle in the **contributor** box; it rides
-along so the editor knows whose work is whose (and it's used to identify your searches
-politely to Wikimedia). The page remembers it next time.
+along so the editor knows whose work is whose. The page remembers it next time.
 
 Your work saves automatically **in that browser** as you go, so you can close the tab
 and come back. When you're done — or want to hand in progress — one **export** button
@@ -65,10 +64,12 @@ gives you a single file to send back.
 1. **Pick the referent.** The page shows the worklist from your subject sheet — click
    the one you're working on (or type its slug). Its meaning seeds the search box.
 
-2. **Get quick candidates from the built-in search.** Hit **search Commons**: a strip
-   of free-licensed images appears (only PD / CC0 / CC BY / CC BY-SA — the rest are
-   filtered out for you). Click any one to drop it in as a card, pre-filled with its
-   credit and licence. Treat these as a **starting point**, not the answer.
+2. **Get quick candidates from the built-in search.** Hit **search images**: a strip of
+   free, safe-for-work candidates appears — via Openverse, which searches Flickr,
+   Wikimedia Commons, museums and more. Only commercially-reusable licences are shown and
+   mature content is excluded at the source. Click any one to drop it in as a card,
+   pre-filled with its credit and licence. Treat these as a **starting point**, not the
+   answer.
 
 3. **Do the real sourcing yourself** — this is where the value is; your own searches
    turn up better, more varied images than the default query. Good CC/PD sources:

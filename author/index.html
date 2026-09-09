@@ -131,7 +131,7 @@
 <div class="col form">
   <header>
     <h1>图像挂接 · imagery linker</h1>
-    <span class="sub">export-only · one card = one images[] entry · <a href="symbol.html">symbol editor →</a></span>
+    <span class="sub">export-only · one card = one images[] entry · <a href="symbol.html">symbol editor →</a> · <a href="#" id="logoutBtn" onclick="logout();return false" title="Best-effort: Basic Auth has no true logout — if this doesn't prompt, close the browser or use a private window.">log out</a></span>
   </header>
   <p class="hint">Link licensed images to a radical/referent. Each card becomes one entry in that
     referent's <code>images[]</code> list (the <code>kangxi_radical_imagery</code> schema). The maintainer
@@ -702,6 +702,21 @@ $('sugResults').addEventListener('click', e => {
   const s = e.target.closest('.sug'); if (s && !s.classList.contains('added')) acceptSuggest(+s.dataset.i);
 });
 $('sugQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSuggest(); } });
+
+// Best-effort Basic Auth logout. There is no true HTTP Basic logout — the browser
+// caches credentials per origin until it closes. Overwriting the cache with a bad
+// credential via fetch, then reloading, forces nginx to re-prompt in current Firefox
+// and mostly in Chrome. Fallback message (in the link's title) tells the user to close
+// the browser / use a private window if it doesn't take.
+async function logout() {
+  try {
+    await fetch(location.href, {
+      headers: { Authorization: 'Basic ' + btoa('logout:' + Date.now()) },
+      cache: 'no-store',
+    });
+  } catch (e) { /* the 401 is expected; ignore */ }
+  location.replace(location.pathname + '?_=' + Date.now());   // reload → re-auth prompt
+}
 
 // init
 $('contributor').value = localStorage.getItem('lp_contributor') || '';

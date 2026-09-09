@@ -76,7 +76,7 @@
 <div class="col form">
   <header>
     <h1>符号编辑器 · symbol authoring</h1>
-    <span class="sub">export-only · nothing leaves this page but JSON you copy · <a href="index.html">imagery linker →</a> · <a href="#" id="logoutBtn" onclick="logout();return false" title="Best-effort: Basic Auth has no true logout — if this doesn't prompt, close the browser or use a private window.">log out</a></span>
+    <span class="sub">export-only · nothing leaves this page but JSON you copy · <a href="index.html">imagery linker →</a> · <a href="#" id="logoutBtn" onclick="logout();return false" title="How to log out — Basic Auth logins can't be cleared from inside the page.">how to log out</a></span>
   </header>
   <p class="hint">Fill a single glyph. The panel on the right mirrors the repo's
     <code>check-source</code> gate live — green means it will pass. Export the JSON and email it;
@@ -441,17 +441,16 @@ function wire(root){ (root||document).querySelectorAll('input,select,textarea').
   if (!el._wired){ el._wired=true; el.addEventListener('input',render); el.addEventListener('change',render); }
 }); }
 
-// Best-effort Basic Auth logout (see index.html for the why). No true HTTP Basic
-// logout exists; overwrite the cached credential with a bad one, then reload to force
-// nginx to re-prompt. Fallback (link title): close the browser / use a private window.
-async function logout() {
-  try {
-    await fetch(location.href, {
-      headers: { Authorization: 'Basic ' + btoa('logout:' + Date.now()) },
-      cache: 'no-store',
-    });
-  } catch (e) { /* the 401 is expected; ignore */ }
-  location.replace(location.pathname + '?_=' + Date.now());   // reload → re-auth prompt
+// HTTP Basic Auth has no in-page logout (see index.html for the why): the browser
+// caches your login for the whole origin until every window is closed, and JS cannot
+// clear it — the old fetch trick poisons the cache and can lock you out, so it's gone.
+function logout() {
+  alert(
+    'To log out of the author area:\n\n' +
+    '• Close ALL browser windows (not just this tab), then reopen — you’ll be asked to log in again.\n\n' +
+    '• Or open the page in a private / incognito window to work as a different user without logging out here.\n\n' +
+    '(Basic Auth logins can’t be cleared from inside the page.)'
+  );
 }
 
 // init — the handle is a per-contributor constant across many glyphs, so persist it

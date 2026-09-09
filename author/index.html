@@ -131,7 +131,7 @@
 <div class="col form">
   <header>
     <h1>图像挂接 · imagery linker</h1>
-    <span class="sub">export-only · one card = one images[] entry · <a href="symbol.html">symbol editor →</a> · <a href="#" id="logoutBtn" onclick="logout();return false" title="Best-effort: Basic Auth has no true logout — if this doesn't prompt, close the browser or use a private window.">log out</a></span>
+    <span class="sub">export-only · one card = one images[] entry · <a href="symbol.html">symbol editor →</a> · <a href="#" id="logoutBtn" onclick="logout();return false" title="How to log out — Basic Auth logins can't be cleared from inside the page.">how to log out</a></span>
   </header>
   <p class="hint">Link licensed images to a radical/referent. Each card becomes one entry in that
     referent's <code>images[]</code> list (the <code>kangxi_radical_imagery</code> schema). The maintainer
@@ -703,19 +703,17 @@ $('sugResults').addEventListener('click', e => {
 });
 $('sugQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSuggest(); } });
 
-// Best-effort Basic Auth logout. There is no true HTTP Basic logout — the browser
-// caches credentials per origin until it closes. Overwriting the cache with a bad
-// credential via fetch, then reloading, forces nginx to re-prompt in current Firefox
-// and mostly in Chrome. Fallback message (in the link's title) tells the user to close
-// the browser / use a private window if it doesn't take.
-async function logout() {
-  try {
-    await fetch(location.href, {
-      headers: { Authorization: 'Basic ' + btoa('logout:' + Date.now()) },
-      cache: 'no-store',
-    });
-  } catch (e) { /* the 401 is expected; ignore */ }
-  location.replace(location.pathname + '?_=' + Date.now());   // reload → re-auth prompt
+// HTTP Basic Auth has no in-page logout: the browser caches your login for the whole
+// origin until every window is closed, and JS cannot clear it. (An earlier version tried
+// the fetch-with-bad-credential trick — it POISONS the cache and can lock you out, so
+// it's gone.) This just tells you the two reliable ways.
+function logout() {
+  alert(
+    'To log out of the author area:\n\n' +
+    '• Close ALL browser windows (not just this tab), then reopen — you’ll be asked to log in again.\n\n' +
+    '• Or open the page in a private / incognito window to work as a different user without logging out here.\n\n' +
+    '(Basic Auth logins can’t be cleared from inside the page.)'
+  );
 }
 
 // init

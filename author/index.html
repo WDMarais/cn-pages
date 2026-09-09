@@ -63,6 +63,25 @@
     background:repeating-conic-gradient(#2a2f3a 0% 25%, #222630 0% 50%) 50% / 16px 16px; display:block; }
   .prev-msg { display:inline-block; margin-top:.15rem; }
   .prev-err { color:var(--warn); }
+  /* Commons suggestions — a seed strip to start from, never the final pick */
+  .suggest { margin:.2rem 0 .3rem; }
+  .suggest .row { gap:.4rem; }
+  .sug-results { display:flex; flex-wrap:wrap; gap:.5rem; margin:.55rem 0 0; }
+  .sug { width:7.4rem; border:1px solid var(--line); border-radius:8px; background:var(--panel2);
+    padding:.35rem; cursor:pointer; position:relative; }
+  .sug:hover { border-color:var(--accent); }
+  .sug img { width:100%; height:5rem; object-fit:contain; border-radius:5px; display:block;
+    background:repeating-conic-gradient(#2a2f3a 0% 25%, #222630 0% 50%) 50% / 12px 12px; }
+  .sug .lic { font-size:10.5px; color:var(--accent); margin-top:.22rem; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .sug .cap { font-size:10.5px; color:var(--ink); line-height:1.2; margin-top:.12rem;
+    max-height:2.4em; overflow:hidden; }
+  .sug.added { opacity:.45; }
+  .sug.added::after { content:'added ✓'; position:absolute; inset:0; display:flex;
+    align-items:center; justify-content:center; background:rgba(20,22,26,.72); color:var(--ok);
+    font-weight:700; border-radius:8px; }
+  .sug-note { font-size:11.5px; color:var(--muted); margin:.4rem 0 0; }
+  .sug-note.err { color:var(--warn); }
   /* worklist grid — the 214 radicals, shaded by imagery coverage */
   .legend { display:flex; flex-wrap:wrap; gap:.4rem .9rem; font-size:11.5px; color:var(--muted); margin:.1rem 0 .5rem; }
   .legend b { color:var(--ink); font-weight:600; }
@@ -143,6 +162,17 @@
   <p class="hint" id="repNote" style="color:var(--warn)"></p>
 
   <h2>images</h2>
+  <div class="suggest">
+    <div class="row">
+      <div><input id="sugQ" placeholder="search Wikimedia Commons for candidates…" autocomplete="off"></div>
+      <button class="btn grow0" id="sugBtn" onclick="runSuggest()">search Commons</button>
+    </div>
+    <p class="hint">Free-licensed candidates to <b>start</b> from — click one to pre-fill a card, then
+      verify it (or bin it and use your own find). Only PD / CC0 / CC BY / CC BY-SA are shown; the query
+      seeds from the meaning, but your own wording is where the good, varied picks come from.</p>
+    <div class="sug-results" id="sugResults"></div>
+    <p class="sug-note" id="sugNote" hidden></p>
+  </div>
   <div id="images"></div>
   <button class="btn sm" onclick="addImage()">+ image</button>
 </div>
@@ -190,6 +220,31 @@ const LICENSES = [
   {label:'(other — enter URL)', url:'', attr:true},
 ];
 const licOf = name => LICENSES.find(l => l.label === name);
+
+// ── Wikimedia Commons suggestions ────────────────────────────────────────────
+// A browser can't set User-Agent (forbidden header), so we identify per-author via
+// Api-User-Agent, which Commons allows for origin=* CORS. Each contributor's traffic
+// carries their own handle rather than one shared identity.
+const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
+function uaString() {
+  const h = ($('contributor')?.value || '').trim();
+  return `lang-pages-imagery-linker/0.1 (educational flashcards; contributor: ${h || 'anonymous'})`;
+}
+const stripTags = h => String(h||'').replace(/<[^>]+>/g,'').replace(/\s+/g,' ').trim();
+// mirror fetch-referent.py::is_free — free-culture only, reject NC/ND/fair-use/ARR
+function isFreeLic(s) {
+  s = (s||'').toLowerCase().trim();
+  if (!s || ['-nc','-nd','fair use','all rights'].some(t => s.includes(t))) return false;
+  return s.startsWith('pd') || ['pdm','cc0','public domain','cc by','cc-by'].some(t => s.includes(t));
+}
+// Commons' LicenseShortName → this page's dropdown label (falls back to "(other)")
+function mapLicense(short) {
+  const s = (short||'').toLowerCase().trim();
+  if (s.includes('cc0')) return 'CC0';
+  if (s.startsWith('pd') || s.includes('public domain') || s === 'pdm') return 'Public Domain';
+  const hit = LICENSES.find(l => l.label.toLowerCase() === s);
+  return hit ? hit.label : '(other — enter URL)';
+}
 const isStr = v => typeof v === 'string' && v.trim() !== '';
 const today = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
 
@@ -541,6 +596,8 @@ function loadReferent(slug, label) {
   stashCurrent();
   $('slug').value = slug;
   $('label').value = label;
+  const sq = $('sugQ'); if (sq) sq.value = label || slug;   // seed the search from the meaning
+  $('sugResults').innerHTML = ''; $('sugNote').hidden = true;
   $('images').innerHTML = '';
   const saved = STASH[slug];
   if (saved && saved.length) saved.forEach(v => addImage(v)); else addImage();
@@ -583,6 +640,78 @@ async function loadWorklist() {
     $('legend').innerHTML = '';
   }
 }
+
+// ── suggestions: query Commons, render a strip, click to pre-fill a card ──────
+let SUG_BUSY = false, SUG = [];
+async function runSuggest() {
+  const q = $('sugQ').value.trim();
+  const note = $('sugNote'), out = $('sugResults'), btn = $('sugBtn');
+  if (!q || SUG_BUSY) return;
+  SUG_BUSY = true; const bt = btn.textContent; btn.textContent = 'searching…'; btn.disabled = true;
+  note.hidden = true; out.innerHTML = '';
+  try {
+    const params = new URLSearchParams({
+      format:'json', origin:'*', action:'query',
+      generator:'search', gsrnamespace:'6', gsrlimit:'20', gsrsearch:q,
+      prop:'imageinfo', iiprop:'url|extmetadata|mime', iiurlwidth:'320',
+    });
+    const r = await fetch(COMMONS_API + '?' + params, { headers: { 'Api-User-Agent': uaString() } });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    const pages = Object.values((d.query && d.query.pages) || {});
+    pages.sort((a,b) => (a.index||0) - (b.index||0));
+    const OK = ['image/jpeg','image/png','image/gif','image/webp'];
+    let hiddenNonFree = 0; const cands = [];
+    for (const p of pages) {
+      const ii = (p.imageinfo || [])[0]; if (!ii || !OK.includes(ii.mime)) continue;
+      const meta = ii.extmetadata || {};
+      const lic = (meta.LicenseShortName || {}).value || '';
+      if (!isFreeLic(lic)) { hiddenNonFree++; continue; }
+      const mapped = mapLicense(lic);
+      cands.push({
+        title:       stripTags((meta.ObjectName || {}).value) || p.title.replace(/^File:/,''),
+        source:      ii.descriptionurl || '',
+        _preview:    ii.thumburl || ii.url || '',
+        credit:      stripTags((meta.Artist || {}).value),
+        license:     mapped,
+        license_raw: lic,
+        license_url: (licOf(mapped) || {}).url || (meta.LicenseUrl || {}).value || '',
+      });
+    }
+    SUG = cands; renderSuggest(hiddenNonFree, q);
+  } catch (e) {
+    note.hidden = false; note.className = 'sug-note err';
+    note.textContent = `couldn’t reach Wikimedia Commons (${e.message}). Try again, or just add images by hand below.`;
+  } finally { SUG_BUSY = false; btn.textContent = bt; btn.disabled = false; }
+}
+function renderSuggest(hiddenNonFree, q) {
+  const out = $('sugResults'), note = $('sugNote');
+  if (!SUG.length) {
+    out.innerHTML = ''; note.hidden = false; note.className = 'sug-note';
+    note.textContent = `no free-licensed results for “${q}”${hiddenNonFree?` (${hiddenNonFree} non-free hidden)`:''} — try different words, or add by hand.`;
+    return;
+  }
+  out.innerHTML = SUG.map((c,i) => `
+    <div class="sug" data-i="${i}" title="${esc(c.title)} — ${esc(c.license_raw)}">
+      <img loading="lazy" src="${esc(c._preview)}" alt="">
+      <div class="lic">${esc(c.license)}</div>
+      <div class="cap">${esc(c.title)}</div>
+    </div>`).join('');
+  if (hiddenNonFree) { note.hidden = false; note.className = 'sug-note';
+    note.textContent = `${hiddenNonFree} non-free result(s) hidden.`; }
+  else note.hidden = true;
+}
+function acceptSuggest(i) {
+  const c = SUG[i]; if (!c) return;
+  if (!$('slug').value.trim()) { alert('Pick a radical (or type a slug) first, so the image has a referent to attach to.'); return; }
+  const { license_raw, ...v } = c;   // license_raw is display-only, not a card field
+  addImage(v);
+  const el = document.querySelector(`.sug[data-i="${i}"]`); if (el) el.classList.add('added');
+}
+$('sugResults').addEventListener('click', e => {
+  const s = e.target.closest('.sug'); if (s && !s.classList.contains('added')) acceptSuggest(+s.dataset.i);
+});
+$('sugQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSuggest(); } });
 
 // init
 $('contributor').value = localStorage.getItem('lp_contributor') || '';

@@ -14,9 +14,9 @@ same shape: *"do this process, for the referents on that sheet."* Everything bel
 is subject-agnostic; wherever a judgement depends on the subject, this brief points
 you at the sheet.
 
-**You never touch JSON.** Images the fetch script pulls are recorded for you
-automatically; images you find yourself get written as a simple fill-in-the-blanks
-text block (details below).
+**You never touch code or data files.** You work entirely on one web page — the
+*imagery linker*: search or paste in images, and it records the licence details for
+you. Nothing to install, no terminal.
 
 Companion docs: [authoring.md](authoring.md) (the wider ingest process — you don't
 need it), [content-graph-schema.md](content-graph-schema.md).
@@ -25,89 +25,89 @@ need it), [content-graph-schema.md](content-graph-schema.md).
 
 ## The one rule that matters most: licensing
 
-Only these licenses are acceptable, because we redistribute the image:
+The licence must let us **reuse the image freely — including commercially, and
+modified** (we resize it and redistribute it). The familiar licences that qualify:
 
 - **Public Domain (PD)** / **CC0**
 - **CC BY** (attribution required)
 - **CC BY-SA** (attribution required)
 
-**Anything else — reject it.** No "all rights reserved", no NC (non-commercial),
-no ND, no "free for personal use only", no unknown/blank license. If you can't find
-a clear license statement on the source page, treat it as unusable and move on.
+Those four cover almost everything you'll want; if you hit another licence, the test
+is the same — *does it allow commercial use and modification?* If it doesn't say so
+clearly, treat it as unusable.
+
+**Reject anything that fails that test:** "all rights reserved", **NC** (non-commercial),
+**ND** (no derivatives — blocks the resize we do), "free for personal use only", or an
+unknown / blank licence. If you can't find a clear licence statement on the source page,
+move on.
 
 Every accepted image **must** have its attribution recorded exactly. A great image
 with the wrong or missing credit is a *reject*, not a "fix later".
 
 ---
 
-## One-time setup
+## Opening the tool
 
-The fetch script talks to Wikimedia, which asks for a real contact address. Set it
-once per terminal session (use whatever email you're comfortable with):
+Everything happens on one web page — the **imagery linker** — that the editor will
+send you a link to. No install, no terminal, nothing to set up: open the link in a
+normal browser. First thing, type your name/handle in the **contributor** box; it rides
+along so the editor knows whose work is whose (and it's used to identify your searches
+politely to Wikimedia). The page remembers it next time.
 
-```bash
-export WIKIMEDIA_CONTACT="you@example.com"
-```
+Your work saves automatically **in that browser** as you go, so you can close the tab
+and come back. When you're done — or want to hand in progress — one **export** button
+gives you a single file to send back.
 
 ---
 
 ## Workflow, per referent
 
-1. **Get candidates from Wikimedia** using the script. The `<slug>` and a good
-   `<search query>` for each referent come from your subject sheet:
+1. **Pick the referent.** The page shows the worklist from your subject sheet — click
+   the one you're working on (or type its slug). Its meaning seeds the search box.
 
-   ```bash
-   python3 data/fetch-referent.py <slug> "<search query>" -n 5
-   # e.g.
-   python3 data/fetch-referent.py tree "tree isolated white background" -n 5
-   ```
+2. **Get quick candidates from the built-in search.** Hit **search Commons**: a strip
+   of free-licensed images appears (only PD / CC0 / CC BY / CC BY-SA — the rest are
+   filtered out for you). Click any one to drop it in as a card, pre-filled with its
+   credit and licence. Treat these as a **starting point**, not the answer.
 
-   This pulls thumbnails into `shared/referents/`, keeps only free-licensed ones,
-   and **records them for you** — no typing needed.
-
-2. **Look at what came back.** Keep the ones that are sharp, obvious and well-licensed
-   — you're aiming for a set of about 5. Glance at each Wikimedia file page to confirm
-   the credit and license look right, and drop any that are weak or wrongly licensed.
-
-3. **If nothing good came back, search deeper yourself** (this is where the real
-   value is). Good CC/PD sources:
-   - **Openverse** (openverse.org) — searches CC images across many sites at once; **start here** for a deeper hunt.
-   - **Wikimedia Commons** (commons.wikimedia.org) — browse the category, not just search.
+3. **Do the real sourcing yourself** — this is where the value is; your own searches
+   turn up better, more varied images than the default query. Good CC/PD sources:
+   - **Wikimedia Commons** (commons.wikimedia.org) — browse the category, not just search; anything here the system can pull automatically.
+   - **Openverse** (openverse.org) — searches CC images across many sites at once.
    - **Flickr** with the license filter set to Creative Commons.
    - PD collections (e.g. museum open-access, Wikimedia PD categories).
 
    *(Avoid Unsplash / Pexels / Pixabay for now — their images are "free" but under
    their own non-CC licenses that don't fit our attribution format. Stick to CC/PD.)*
 
-   When you find a keeper: **download it into `shared/referents/`** with a sensible
-   filename (`<slug>-NN.jpg`), then **record it as a text block** — see next section.
+   When you find a keeper, add it as a card — see the next section.
+
+4. **Aim for about 5** good cards per referent, so the editor has strong ones to choose
+   from. The panel on the right turns green when a card's licence details are complete;
+   a red note says exactly what's still missing.
 
 ---
 
-## Recording a hand-found image (the fill-in block)
+## Recording an image you found yourself
 
-For images you found yourself, open **`data/referents-inbox.toml`** and add one
-block per image. It's just labelled lines — copy the template, fill in the values,
-keep the quotes:
+Click **+ image** to add a blank card, then fill it in:
 
-```toml
-[[image]]
-slug    = "tree"          # the referent id, from your subject sheet
-label   = "tree"          # how it reads on the card (usually same as slug)
-file    = "tree-03.jpg"   # the filename you saved into shared/referents/
-credit  = "Jane Doe"      # author, exactly as the source page states
-license = "CC BY-SA 4.0"  # must be PD / CC0 / CC BY / CC BY-SA — nothing else
-source  = "https://commons.wikimedia.org/wiki/File:..."   # the file PAGE url
-```
+- **source URL** — the image's **file / description page** (the page that shows the
+  licence), *not* the raw image link. For Wikimedia that's the `.../wiki/File:…` page.
+- **preview** — paste a direct image link here to see the picture on the spot (this is
+  just for your eyes; it isn't saved). A direct-image source fills it in for you.
+- **licence** — pick from the dropdown. It only lists the allowed ones (PD / CC0 /
+  CC BY / CC BY-SA) and auto-fills the licence URL. If the image isn't under one of
+  these, it's unusable — don't record it.
+- **credit** — the author / uploader, **exactly** as the source page states it. Don't
+  paraphrase; this is the bit that has to be precise. (Search-picked cards fill this in
+  for you — still check it against the source page.)
+- **title / notes** — optional, but a one-line note on what the image shows helps the
+  editor match it.
 
-- Add as many `[[image]]` blocks as you like — one per image.
-- `source` is the **file page URL** (the page that shows the license), not the raw
-  image link.
-- Type the `credit` and `license` **exactly** as the source states them. Don't
-  paraphrase — this is the bit that has to be precise.
-
-That's it. Wynand converts the inbox into the site's data himself; you never edit
-the JSON.
+The file name and today's date fill in automatically. That's it — you never save image
+files or edit any data yourself; the editor pulls the actual files from the sources you
+recorded.
 
 ---
 
@@ -172,16 +172,17 @@ honestly find 2 or 3 good ones, that's fine — quality beats hitting the number
 
 ## Definition of done (per referent)
 
-- Around 5 images saved in `shared/referents/` (a *varied set* for **broad** referents;
-  fewer is fine if that's all you can honestly find).
-- Script-fetched images: confirmed the auto-recorded credit/license looks right.
-- Hand-found images: a complete `[[image]]` block in `data/referents-inbox.toml`
-  (all six lines filled).
-- Every license is one of PD / CC0 / CC BY / CC BY-SA.
+- About 5 image cards for the referent (a *varied set* for **broad** referents; fewer
+  is fine if that's all you can honestly find), each showing green on the right.
+- Search-picked cards: confirmed the auto-filled credit/licence looks right against the
+  source page.
+- Hand-added cards: source page URL, licence, and credit all filled in accurately.
+- Every licence allows commercial reuse and modification (e.g. PD / CC0 / CC BY / CC BY-SA).
 - The image clearly and unambiguously depicts the meaning, **judged by the referent's
   type** (see the type menu above — object vs broad vs action vs quality vs identity).
 - **Abstract / not-suitable** referents: flagged as such (per your sheet's
   instruction), not forced with a misleading image.
+- **Exported** — hit **export all** and send back the one file it produces.
 
 **Don't:** invent or guess a credit; use a non-free image "just this once"; add text
 overlays or edit images; paraphrase a license string; force a picture onto a referent
@@ -191,12 +192,15 @@ that has no honest one.
 
 ## How the work is checked
 
-Wynand runs two things — you don't need to:
+The editor runs these — you don't need to:
 
-1. `python3 data/referents-from-toml.py` — folds your inbox blocks into the site data
-   **exactly as you typed them** (no LLM, no rewording), and rejects any non-free
-   license or incomplete block on the spot.
-2. `python3 data/check-source.py` — confirms every referent resolves and is sound.
+1. `python3 data/fetch-referent-images.py <your-export>.json` — pulls the actual image
+   files from the sources you recorded.
+2. `python3 data/qc-viewer.py` — shows every candidate in a grid to keep the best and
+   drop the rest, then folds the keepers in (`referents-from-qc.py`), taking your credit
+   / licence strings **exactly** as you entered them (no rewording), and rejecting any
+   non-free licence on the spot.
+3. `python3 data/check-source.py` — confirms every referent resolves and is sound.
 
 If something's off you'll get it back with a note — no problem, it's expected on the
 first batch while we calibrate.

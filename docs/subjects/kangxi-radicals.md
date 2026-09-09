@@ -77,7 +77,7 @@ order you like.
 
 ---
 
-## Search-query hints (for `data/fetch-referent.py`)
+## Search-query hints (for the Commons search box, or your own searches)
 
 Radicals are often a *bare noun*, which returns messy results. Two habits help:
 

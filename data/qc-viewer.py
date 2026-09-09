@@ -210,10 +210,18 @@ a{color:var(--acc);text-decoration:none}a:hover{text-decoration:underline}
 #bar button{margin-left:auto;background:var(--acc);border:0;color:#fff;border-radius:6px;padding:7px 14px;cursor:pointer}
 #lb{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:50;cursor:zoom-out}
 #lb img{max-width:94vw;max-height:94vh}
+#bar .storage{color:var(--mut);font-size:12px;display:flex;align-items:center;gap:7px}
+#bar .storage .sbar{width:84px;height:6px;border-radius:4px;background:#1e242f;border:1px solid var(--line);overflow:hidden}
+#bar .storage .sfill{height:100%;width:0;background:var(--good);transition:width .25s,background .25s}
+#bar .storage .sfill.warn{background:var(--warn)}
+#bar .storage .sfill.danger{background:var(--bad)}
+#bar .storage.alert{color:var(--warn)}
+#bar .storage.alert.danger{color:var(--bad);font-weight:700}
 </style></head><body>
 <div id="nav"><h1>Radicals (__NR__)</h1><div id="navlist"></div></div>
 <div id="main"></div>
 <div id="bar"><span>Kept <b id="nk">0</b> · Rejected <span class="r" id="nrj">0</span> · Undecided <span id="nu">0</span></span>
+<span id="storage" class="storage" title="Browser local-storage used by your Keep/Reject decisions."><span id="sLabel">storage: —</span><span class="sbar"><span class="sfill" id="sFill"></span></span></span>
 <button onclick="exportQC()">Export decisions</button></div>
 <div id="lb" onclick="this.style.display='none'"><img></div>
 <script>
@@ -228,6 +236,18 @@ function licOk(l){
 }
 const dec=JSON.parse(localStorage.getItem('qc')||'{}');
 function save(){localStorage.setItem('qc',JSON.stringify(dec));counts();}
+const LS_QUOTA=5*1024*1024;   // ~5 MB per-origin cap (common browser default)
+function storageBytes(){let n=0;try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);n+=k.length+(localStorage.getItem(k)||'').length;}}catch(e){}return n*2;}
+function fmtMB(b){return (b/1048576).toFixed(b<104857?2:1)+' MB';}
+function updateStorage(){
+  const el=document.getElementById('storage');if(!el)return;
+  const used=storageBytes(),pct=Math.min(100,Math.round(used/LS_QUOTA*100));
+  const fill=document.getElementById('sFill');
+  fill.style.width=pct+'%';fill.className='sfill'+(pct>=90?' danger':pct>=70?' warn':'');
+  document.getElementById('sLabel').textContent='storage: '+fmtMB(used)+' / ~'+fmtMB(LS_QUOTA)+' ('+pct+'%)';
+  el.className='storage'+(pct>=90?' alert danger':pct>=70?' alert':'');
+  el.title=pct>=70?'Near this browser’s storage limit — click Export decisions now to be safe.':'Browser local-storage used by your Keep/Reject decisions.';
+}
 let sel=0;
 function counts(){
   let k=0,r=0,u=0;
@@ -239,6 +259,7 @@ function counts(){
     const d=el.querySelector('.dot');
     d.style.background=bad?'var(--bad)':done?'var(--good)':'var(--line)';
   });
+  updateStorage();
 }
 function nav(){
   navlist.innerHTML='';

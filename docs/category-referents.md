@@ -9,7 +9,7 @@ valid instance of 女, 子, or 老 — a **class** of problem, not five bad pick
 
 Companion docs: [content-graph-schema.md](content-graph-schema.md) (`referent` node,
 `denotes` edge), [deck-design.md](deck-design.md) (interference A/B), the
-referent-sourcing [image-sourcing-brief.md](image-sourcing-brief.md).
+referent-sourcing [referent-sourcing-brief.md](referent-sourcing-brief.md).
 
 ## The problem: there is no photo of "a generic human"
 
@@ -176,5 +176,5 @@ referent layer, not in CN.
   `deck-design.md` "Directionality" parked item — implement once, serves both).
 
 **Feeds:** a category-vs-subordinate sourcing rule belongs in
-`image-sourcing-brief.md`; the referent-QC viewer should surface a referent's `isa`
+`referent-sourcing-brief.md` (or a subject sheet); the referent-QC viewer should surface a referent's `isa`
 parents/children so a reviewer can judge montage-vs-prototype at review time.

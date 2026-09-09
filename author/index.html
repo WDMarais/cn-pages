@@ -647,7 +647,7 @@ async function runSuggest() {
   note.hidden = true; out.innerHTML = '';
   try {
     const params = new URLSearchParams({
-      q, license_type: 'commercial,modification', page_size: '24',
+      q, license_type: 'commercial,modification', page_size: '20',   // 20 = the anonymous cap (higher → 401)
     });
     const r = await fetch(OPENVERSE_API + '?' + params);
     if (r.status === 429) throw new Error('search limit reached — Openverse allows 200 searches/day for anonymous use; hand-source for now, or try later');

@@ -36,6 +36,7 @@ AUDIENCES = {"cn", "jp"}
 KINDS = {"meaning", "mnemonic"}
 KANGXI_MAX = 214
 REPRESENTATIONS = {"image", "sound", "motion", "scene", "sentence", "diagram"}
+SOURCING_STATUSES = ("done", "later")   # mirrors sourcing-status.py
 
 
 class Report:
@@ -369,6 +370,33 @@ def check_kangxi(rep):
             rep.err(where, f"representations has duplicate tags: {reps}")
 
 
+def check_sourcing_status(rep):
+    """data/sourcing-status.json — the editor's done / later marks on the /author/
+    imagery worklist (written by sourcing-status.py). A slug naming no referent would
+    silently dim nothing, and an off-vocab status would leave the tile open, so both
+    fail here rather than at the tool."""
+    path = DATA / "sourcing-status.json"
+    if not path.exists():
+        return
+    marks = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(marks, dict):
+        rep.err("sourcing-status.json", "must be an object {slug: {status, note?}}")
+        return
+    known = {r["meaning"] for r in json.loads(
+        (DATA / "kangxi.json").read_text(encoding="utf-8")).get("radicals", [])}
+    rpath = DATA / "referents.json"
+    if rpath.exists():
+        known |= set(json.loads(rpath.read_text(encoding="utf-8")))
+    for slug, m in marks.items():
+        where = f"sourcing-status.json {slug}"
+        if slug not in known:
+            rep.err(where, "names no referent (not in kangxi.json or referents.json)")
+        if not isinstance(m, dict) or m.get("status") not in SOURCING_STATUSES:
+            rep.err(where, f"status must be one of {list(SOURCING_STATUSES)}")
+        elif "note" in m and not isinstance(m["note"], str):
+            rep.err(where, "note must be a string")
+
+
 def check_cross(rep, syms):
     """Invariants across the whole set, not any single file."""
     by_kangxi = {}
@@ -427,6 +455,7 @@ def main():
     check_words(rep, syms)
     check_cross(rep, syms)
     check_kangxi(rep)
+    check_sourcing_status(rep)
 
     for where, msg in rep.warns:
         print(f"⚠  {where}: {msg}")

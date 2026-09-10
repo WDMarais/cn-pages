@@ -57,8 +57,10 @@ Your work saves automatically **in that browser** as you go, so you can close th
 and come back. When you're done — or want to hand in progress — one **export** button
 gives you a single file to send back. To hand in just part of it (say, today's
 referents), open **export a selection**, hit *edited today* (or tick them by hand), and
-export those. Each tile you've worked on shows a purple **+N** — the images you've saved
-on it.
+export those. Each tile shows how many images the collection already holds, plus a
+**+N** for the ones you've saved; it turns **green** once you have 5 complete images on
+it. Switching browser or computer? Export, then **import a file** on the new one — it
+merges into whatever is saved there, skipping images you already have.
 
 ---
 
@@ -66,6 +68,9 @@ on it.
 
 1. **Pick the referent.** The page shows the worklist from your subject sheet — click
    the one you're working on (or type its slug). Its meaning seeds the search box.
+   **Dim** tiles aren't asking for images right now: either not an image referent at
+   all, or the editor has marked them *done* (enough images already) or *later* — skip
+   those unless your sheet says otherwise. Tick **hide dim tiles** to see just the open ones.
 
 2. **Get quick candidates from the built-in search.** Hit **search images**: a strip of
    free, safe-for-work candidates appears — via Openverse, which searches Flickr,
@@ -208,6 +213,8 @@ The editor runs these — you don't need to:
    / licence strings **exactly** as you entered them (no rewording), and rejecting any
    non-free licence on the spot.
 3. `python3 data/check-source.py` — confirms every referent resolves and is sound.
+4. `python3 data/sourcing-status.py done <referent>` (or `later`) — dims that tile for
+   everyone once it has enough, or when it should wait.
 
 If something's off you'll get it back with a note — no problem, it's expected on the
 first batch while we calibrate.

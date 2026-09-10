@@ -93,10 +93,13 @@
   .legend { display:flex; flex-wrap:wrap; gap:.4rem .9rem; font-size:11.5px; color:var(--muted); margin:.1rem 0 .5rem; }
   .legend b { color:var(--ink); font-weight:600; }
   .swatch { display:inline-block; width:.7rem; height:.7rem; border-radius:3px; vertical-align:-1px; margin-right:.25rem; border:1px solid var(--line); }
-  .sw-has { background:rgba(85,201,138,.85); }
+  .sw-ready { background:rgba(85,201,138,.85); }
   .sw-need { background:var(--panel2); }
-  .sw-noimg { background:transparent; border-style:dashed; opacity:.6; }
+  .sw-off { background:transparent; border-style:dashed; opacity:.6; }
   #filter { margin-bottom:.5rem; }
+  label.hide-dim { display:flex; align-items:center; gap:.35rem; margin:0 0 .5rem; padding:.42rem 0;
+    white-space:nowrap; cursor:pointer; }
+  label.hide-dim input { width:auto; margin:0; }
   .grid { display:flex; flex-wrap:wrap; gap:.45rem; max-height:44vh; overflow-y:auto; padding:.5rem;
     border:1px solid var(--line); border-radius:8px; background:var(--field); }
   .chip { width:6rem; padding:.42rem .3rem .33rem; border-radius:10px; border:1px solid var(--line);
@@ -104,26 +107,26 @@
   .chip:hover { border-color:var(--accent); }
   .chip .g { font-size:28px; line-height:1.15; }
   .chip .m { font-size:15px; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .chip .rep { font-size:13px; font-style:italic; color:var(--muted); line-height:1.1;
+  .chip .why { font-size:13px; font-style:italic; color:var(--muted); line-height:1.1;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .chip .num { position:absolute; top:2px; left:4px; font-size:12px; color:var(--muted); }
-  .chip .badges { position:absolute; top:2px; right:3px; display:flex; gap:2px; }
-  .chip .cnt, .chip .mine { font-size:12px; font-weight:700; color:#08121c; border-radius:8px; padding:0 4px; }
-  .chip .cnt { background:var(--ok); }
-  /* +N = images YOU have saved here (purple, like the foot-bar); "+" because yours are
-     added to the committed count at merge */
-  .chip .mine { background:var(--accent2); }
-  /* Informational, not instructional. green = HAS imagery (a fact: present, with a
-     count). A plain chip = an image referent with none yet — the neutral baseline,
-     deliberately unstyled so it reads as "nothing here" not "warning, act on this".
-     A dim dashed chip = NOT an image referent; its real modality is printed on it. */
-  .chip.has { border-color:rgba(85,201,138,.5); background:rgba(85,201,138,.10); }
-  .chip.has .g { color:var(--ok); }
-  .chip.noimg { opacity:.45; border-style:dashed; }
-  .chip.sel { outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); opacity:1; }
-  /* wip = you have locally-saved work on this referent (purple foot-bar + "+N" badge) */
-  .chip.wip { box-shadow: inset 0 -3px 0 var(--accent2); opacity:1; }
-  .sw-wip { background:var(--accent2); }
+  /* One channel per fact — no colour doing double duty:
+       count pill   how many images: the collection's (plain number) + YOURS (+N, filled)
+       dim, dashed  the site isn't asking for images here — not an image referent, or the
+                    editor marked it done / later (sourcing-status.json); why is printed on it
+       green        YOU have enough complete images here — the same green as the ✓ panel
+       blue ring    the one you have open
+     A plain tile is simply open. How many images a referent holds never colours it. */
+  .cnt { font-size:11.5px; line-height:1.3; color:var(--muted); border:1px solid var(--line);
+    border-radius:8px; padding:0 3px; white-space:nowrap; }
+  .cnt b { background:var(--ink); color:#08121c; border-radius:6px; padding:0 3px; }
+  .chip .cnt { position:absolute; top:2px; right:3px; }
+  .chip.off { border-style:dashed; }
+  .chip.off .g, .chip.off .m { opacity:.4; }   /* only the name fades, so the counts stay readable */
+  .chip.ready { border-color:rgba(85,201,138,.6); background:rgba(85,201,138,.10); }
+  .chip.ready .g { color:var(--ok); }
+  .chip.sel { outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); }
+  .chip.sel .g, .chip.sel .m { opacity:1; }
   .saved-ind { font-size:11px; color:var(--muted); align-self:center; transition:color .2s; }
   .saved-ind.flash { color:var(--ok); }
   /* local-storage guardrail meter (shared origin budget, ~5 MB) */
@@ -148,6 +151,7 @@
   .subset-row .s { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .subset-row .meta { color:var(--muted); font-size:11px; white-space:nowrap; }
   .subset-row .exp { color:var(--ok); font-size:11px; white-space:nowrap; }
+  .import-err { color:var(--warn); }
 </style>
 </head>
 <body>
@@ -163,12 +167,16 @@
     the gate on the right enforces it.</p>
 
   <h2>worklist · pick a radical</h2>
-  <p class="hint">The canonical 214 Kangxi radicals. The shading states a fact, not a to-do:
-    <span style="color:var(--ok)">green</span> = already has imagery (with a count); a plain chip = an image
-    referent with none yet; a dim dashed chip = not an image referent at all — it's anchored by
-    diagram / sound / sentence instead (printed on the chip). Pick any to attach imagery.</p>
+  <p class="hint">The canonical 214 Kangxi radicals. <b>Dim</b> tiles aren't asking for images right now:
+    either not an image referent (anchored by diagram / sound / sentence instead — printed on the tile), or
+    the editor has marked them <i>done</i> or <i>later</i>. The small number is how many images the
+    collection already holds; <b>+N</b> is how many you've saved. A tile turns
+    <span style="color:var(--ok)">green</span> once you have 5 complete images on it. Pick any to attach imagery.</p>
   <div class="legend" id="legend"></div>
-  <input id="filter" placeholder="filter by meaning / glyph / №" autocomplete="off">
+  <div class="row">
+    <div><input id="filter" placeholder="filter by meaning / glyph / №" autocomplete="off"></div>
+    <label class="grow0 hide-dim" title="Leave just the open tiles (the one you have selected always stays)."><input type="checkbox" id="hideDim"> hide dim tiles</label>
+  </div>
   <div class="grid" id="grid"><p class="hint" style="padding:.4rem 0">loading worklist…</p></div>
 
   <h2>referent</h2>
@@ -214,6 +222,10 @@
     <span class="saved-ind" id="savedInd" title="Saved in this browser; restored when you return."></span>
   </div>
   <p class="hint">Exports everything you've done as one file (<b id="batchCount">0 referents</b>) — the maintainer folds it in one pass. Saved automatically <b>in this browser</b>; close the tab and return anytime (this device/browser only, not synced). <button class="btn sm danger" id="clearBtn" onclick="clearWork()">clear saved work</button></p>
+  <p class="hint">Moving to another browser, or restoring a backup? <button class="btn sm" onclick="$('importFile').click()">⬆ import a file</button>
+    merges an exported file into your saved work — images you already have are skipped.
+    <input type="file" id="importFile" accept=".json,application/json" multiple hidden></p>
+  <p class="hint" id="importNote" hidden></p>
   <details class="subset">
     <summary class="hint" style="cursor:pointer">export a selection <span id="subsetSummary"></span></summary>
     <div class="subset-quick">
@@ -452,6 +464,19 @@ function collect() {
   return { slug, o };
 }
 
+// one card's licence/attribution gaps — the red ERR lines, and what "complete" means
+function cardErrors(im) {
+  const E = [], l = licOf(im.license);
+  if (!isStr(im.license)) E.push('license is required');
+  if (!isStr(im.file)) E.push('file name is required');
+  if (l && l.attr) {  // attribution licenses legally need credit + source + a license URL
+    if (!isStr(im.credit)) E.push(`${im.license} requires a credit`);
+    if (!isStr(im.source)) E.push(`${im.license} requires a source URL`);
+    if (!isStr(im.license_url)) E.push(`${im.license} needs a license URL`);
+  }
+  return E;
+}
+
 function validate(slug, ref, images) {
   const E=[], W=[]; const bad=new Set();
   if (!isStr(slug)) E.push('referent slug is required');
@@ -459,17 +484,11 @@ function validate(slug, ref, images) {
   if (!isStr(ref.label)) E.push('referent label is required');
   if (!images.length) W.push('no images yet — add at least one');
   images.forEach((im,i)=>{
-    const l = licOf(im.license); let cardBad=false;
-    if (!isStr(im.license)) { E.push(`image ${i+1}: license is required`); cardBad=true; }
-    if (!isStr(im.file)) { E.push(`image ${i+1}: file name is required`); cardBad=true; }
-    if (l && l.attr) {  // attribution licenses legally need credit + source + a license URL
-      if (!isStr(im.credit)) { E.push(`image ${i+1}: ${im.license} requires a credit`); cardBad=true; }
-      if (!isStr(im.source)) { E.push(`image ${i+1}: ${im.license} requires a source URL`); cardBad=true; }
-      if (!isStr(im.license_url)) { E.push(`image ${i+1}: ${im.license} needs a license URL`); cardBad=true; }
-    }
+    const ce = cardErrors(im);
+    ce.forEach(m => E.push(`image ${i+1}: ${m}`));
     if (isStr(im.source) && !/^https?:\/\//i.test(im.source)) W.push(`image ${i+1}: source doesn't look like a URL`);
     if (!isStr(im.title)) W.push(`image ${i+1}: no title (recommended)`);
-    if (cardBad) bad.add(i);
+    if (ce.length) bad.add(i);
   });
   // duplicates — soft notes, never errors (see srcKey)
   const dup = new Set(), seen = new Map(), sIdx = stashIndex();
@@ -562,6 +581,82 @@ async function copyAll() {
   catch(e){ alert('clipboard blocked — use “export all” to download instead'); }
 }
 
+// ── import: merge an exported file back in (restore a backup / move browsers) ──
+// Never destructive: cards JOIN the referent's saved work. An image you already have
+// there — or that the collection already holds — is skipped, and a clashing file name
+// gets the next free number, so the maintainer's fetch can't write one over another.
+const CARD_FIELDS = ['file','title','credit','license','license_url','source','retrieved','modified','notes'];   // imageOf's order
+// exports drop the preview; rebuild one where the links allow
+function previewFor(im) {
+  if (/^https?:\/\//i.test(im._download || '')) return im._download;
+  if (isWikiFilePage(im.source)) return im.source.replace('/wiki/File:', '/wiki/Special:FilePath/') + '?width=400';
+  return /\.(jpe?g|png|gif|webp|svg)(?:$|[?#])/i.test(im.source) ? im.source : '';
+}
+function freeFile(slug, file, taken) {
+  const ext = (/\.(\w+)$/.exec(file) || [, 'jpg'])[1];
+  for (let i = 1; ; i++) { const f = `${slug}-${String(i).padStart(2,'0')}.${ext}`; if (!taken.has(f)) return f; }
+}
+function importWork(o) {
+  if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('not an export file');
+  const refs = Object.keys(o).filter(s => !s.startsWith('_') && !s.startsWith('<') && Array.isArray(o[s]?.images));
+  if (!refs.length) throw new Error('no referents with images in it');
+  stashCurrent();
+  const out = { slugs: new Set(), added: 0, skipped: 0 };
+  const sig = c => JSON.stringify([c.title, c.credit, c.license, c.notes]);   // for cards with no link at all
+  for (const slug of refs) {
+    const cards = STASH[slug] || [], fresh = [];
+    const have = new Set(cards.flatMap(imgKeys));
+    const sigs = new Set(cards.filter(c => !imgKeys(c).length).map(sig));
+    const files = new Set(cards.map(c => c.file));
+    for (const raw of o[slug].images) {
+      if (!raw || typeof raw !== 'object') continue;
+      const c = {}; for (const f of CARD_FIELDS) c[f] = typeof raw[f] === 'string' ? raw[f].trim() : '';
+      if (isStr(raw._download)) c._download = raw._download.trim();
+      if (!cardHasContent(c)) continue;   // a blank card — nothing to bring over
+      const ks = imgKeys(c);
+      if (ks.length ? ks.some(k => have.has(k) || COLL_BY_KEY.get(k)?.has(slug)) : sigs.has(sig(c))) { out.skipped++; continue; }
+      if (!c.file || files.has(c.file)) c.file = freeFile(slug, c.file, files);
+      files.add(c.file); ks.forEach(k => have.add(k)); if (!ks.length) sigs.add(sig(c));
+      c._preview = previewFor(c);
+      fresh.push(c);
+    }
+    if (!fresh.length) continue;
+    STASH[slug] = [...cards, ...fresh];
+    if (!LABELS[slug]) LABELS[slug] = isStr(o[slug].label) ? o[slug].label.trim() : slug;
+    // date it by the cards' own "retrieved" (a restored backup isn't "edited today"); new
+    // cards since the last export make it unsent again
+    TOUCHED[slug] = Math.max(TOUCHED[slug] || 0, newestRetrieved(fresh) || Date.now());
+    if (EXPORTED[slug] && EXPORTED[slug] >= TOUCHED[slug]) delete EXPORTED[slug];
+    out.slugs.add(slug); out.added += fresh.length;
+  }
+  if (!$('contributor').value.trim() && isStr(o._contributor)) {
+    $('contributor').value = o._contributor.trim();
+    try { localStorage.setItem('lp_contributor', $('contributor').value); } catch (e) {}
+  }
+  return out;
+}
+$('importFile').addEventListener('change', async e => {
+  const files = [...e.target.files]; e.target.value = '';   // so picking the same file again still fires
+  if (!files.length) return;
+  const slugs = new Set(), bad = []; let added = 0, skipped = 0;
+  for (const f of files) {
+    let o; try { o = JSON.parse(await f.text()); } catch (err) { bad.push(`${f.name} (not a JSON file)`); continue; }
+    try { const r = importWork(o); r.slugs.forEach(s => slugs.add(s)); added += r.added; skipped += r.skipped; }
+    catch (err) { bad.push(`${f.name} (${err.message})`); }
+  }
+  const cur = $('slug').value.trim();
+  if (slugs.has(cur)) { $('images').innerHTML = ''; STASH[cur].forEach(v => addImage(v)); }   // the open referent gained cards
+  persist(); buildGrid($('filter').value); render();
+  const note = $('importNote'); note.hidden = false;
+  note.className = 'hint' + (bad.length ? ' import-err' : '');
+  const pl = (k, w) => `${k} ${w}${k === 1 ? '' : 's'}`;
+  note.textContent = [
+    (added || !bad.length) && `Imported ${pl(added, 'image')} across ${pl(slugs.size, 'referent')}` +
+      (skipped ? ` · ${skipped} you already had ${skipped === 1 ? 'was' : 'were'} skipped` : '') + '.',
+    bad.length && `Couldn’t import ${bad.join('; ')}.`,
+  ].filter(Boolean).join(' ');
+});
+
 // ── export a selection: tick a subset of your saved referents ─────────────────
 // For handing work in piecemeal ("the 10 I did today"). TOUCHED / EXPORTED (slug →
 // ms, persisted with the stash) let the quick-picks answer "what did I edit today?"
@@ -632,51 +727,76 @@ $('slug').addEventListener('input', () => { renumber(); });
 // 214 spine + `representations`; data/referents.json is the imagery already held.
 let RADICALS = [], COVERED = new Set(), IMG_COUNT = {};
 let COLL_BY_KEY = new Map();   // srcKey → Set(slug): images already in referents.json (the duplicate check)
+let SITE_STATUS = {};          // slug → {status:'done'|'later', note?} — the editor's marks (data/sourcing-status.json)
+const ENOUGH = 5;              // the brief's "about 5": your complete images that turn a tile green (the hint says 5 too)
 
-function repState(r) {                        // → 'has' | 'need' | 'noimg'
-  if (!r.representations || !r.representations.includes('image')) return 'noimg';
-  return COVERED.has(r.meaning) ? 'has' : 'need';
+// is the site asking for images here? '' = yes (open); else why not: 'noimg' (not an
+// image referent), or the editor's 'done' / 'later' mark
+function offState(r) {
+  if (!(r.representations || []).includes('image')) return 'noimg';
+  return SITE_STATUS[r.meaning]?.status || '';
+}
+// YOUR images on a referent that count toward ENOUGH: licence-complete, and not a
+// duplicate (of another of your cards there, or of one the collection already holds)
+function readyCount(slug) {
+  const seen = new Set(); let n = 0;
+  for (const c of STASH[slug] || []) {
+    if (cardErrors(c).length) continue;
+    const ks = imgKeys(c);
+    if (ks.some(k => seen.has(k) || COLL_BY_KEY.get(k)?.has(slug))) continue;
+    ks.forEach(k => seen.add(k)); n++;
+  }
+  return n;
 }
 
 function buildGrid(q='') {
   q = q.trim().toLowerCase();
-  const sel = $('slug').value.trim();
-  const chips = RADICALS.filter(r => !q ||
+  const sel = $('slug').value.trim(), hideDim = $('hideDim').checked;
+  const chips = RADICALS.filter(r => (!q ||
       r.meaning.toLowerCase().includes(q) || r.glyph === q || String(r.num) === q)
+      && (!hideDim || !offState(r) || r.meaning === sel))   // the selected tile always stays
     .map(r => {
-      const st = repState(r);
-      const reps = r.representations || [];
-      const cnt = st==='has' && IMG_COUNT[r.meaning] ? `<span class="cnt">${IMG_COUNT[r.meaning]}</span>` : '';
-      const mineN = (STASH[r.meaning] || []).length;   // images YOU have saved here
-      const mine = mineN ? `<span class="mine">+${mineN}</span>` : '';
-      // on a non-image referent, print its actual modality so the dim chip is
-      // informative ("this is a diagram/sound referent") rather than just "excluded"
-      const rep = st==='noimg' ? `<div class="rep">${esc(reps.join('/'))}</div>` : '';
-      const wip = mineN ? ' wip' : '';
-      const tip = (cnt ? ` · ${IMG_COUNT[r.meaning]} in the collection` : '') + (mineN ? ` · ${mineN} saved by you` : '');
-      return `<div class="chip ${st}${r.meaning===sel?' sel':''}${wip}" data-meaning="${esc(r.meaning)}"
-        title="№${r.num} ${esc(r.meaning)} · ${esc(reps.join(', '))}${tip}">
-        <span class="num">${r.num}</span>${cnt || mine ? `<span class="badges">${cnt}${mine}</span>` : ''}
-        <div class="g">${esc(r.glyph)}</div><div class="m">${esc(r.meaning)}</div>${rep}</div>`;
+      const off = offState(r), mark = SITE_STATUS[r.meaning], reps = r.representations || [];
+      const have = IMG_COUNT[r.meaning] || 0;           // in the collection
+      const mineN = (STASH[r.meaning] || []).length;    // saved by YOU
+      const ready = mineN ? readyCount(r.meaning) : 0;
+      const cnt = have || mineN
+        ? `<span class="cnt">${have || ''}${have && mineN ? ' ' : ''}${mineN ? `<b>+${mineN}</b>` : ''}</span>` : '';
+      // a dim tile says WHY: its real modality ("diagram/sentence"), or the editor's mark
+      const why = off ? `<div class="why">${esc(off === 'noimg' ? reps.join('/') : off)}</div>` : '';
+      const tip = [`№${r.num} ${r.meaning}`, reps.join(', '),
+        have && `${have} in the collection`,
+        mineN && `${mineN} saved by you (${ready} of ${ENOUGH} complete)`,
+        mark && `marked ${mark.status} by the editor${mark.note ? ': ' + mark.note : ''}`].filter(Boolean).join(' · ');
+      return `<div class="chip${off ? ' off' : ''}${ready >= ENOUGH ? ' ready' : ''}${r.meaning===sel?' sel':''}"
+        data-meaning="${esc(r.meaning)}" title="${esc(tip)}">
+        <span class="num">${r.num}</span>${cnt}
+        <div class="g">${esc(r.glyph)}</div><div class="m">${esc(r.meaning)}</div>${why}</div>`;
     }).join('');
-  $('grid').innerHTML = chips || '<p class="hint" style="padding:.4rem 0">no radical matches that filter.</p>';
-  const all = RADICALS.reduce((a,r)=>{ a[repState(r)]++; return a; }, {has:0,need:0,noimg:0});
-  const wipN = RADICALS.reduce((a,r)=>a + (STASH[r.meaning] && STASH[r.meaning].length ? 1 : 0), 0);
+  $('grid').innerHTML = chips || `<p class="hint" style="padding:.4rem 0">${hideDim
+    ? 'no open radical matches — untick “hide dim tiles” to see the rest.' : 'no radical matches that filter.'}</p>`;
+  const n = { '':0, noimg:0, done:0, later:0 };
+  for (const r of RADICALS) n[offState(r)]++;
+  const readyN = RADICALS.filter(r => STASH[r.meaning] && readyCount(r.meaning) >= ENOUGH).length;
   $('legend').innerHTML =
-    `<span><span class="swatch sw-has"></span>has imagery <b>${all.has}</b></span>`+
-    `<span><span class="swatch sw-need"></span>image referent, none yet <b>${all.need}</b></span>`+
-    `<span><span class="swatch sw-noimg"></span>not an image referent <b>${all.noimg}</b></span>`+
-    (wipN?`<span><span class="swatch sw-wip"></span>your saved work <b>${wipN}</b> · purple <b>+N</b> = your images</span>`:'');
+    `<span><span class="swatch sw-need"></span>open <b>${n['']}</b></span>`+
+    `<span><span class="swatch sw-off"></span>dim: not an image referent <b>${n.noimg}</b>`+
+      (n.done ? ` · done <b>${n.done}</b>` : '') + (n.later ? ` · later <b>${n.later}</b>` : '') + `</span>`+
+    `<span><span class="cnt">3 <b>+2</b></span> in the collection · yours</span>`+
+    `<span><span class="swatch sw-ready"></span>you have ${ENOUGH} complete <b>${readyN}</b></span>`;
 }
 
 function updateNotes(meaning) {
   meaning = (meaning||'').trim();
-  const r = RADICALS.find(x => x.meaning === meaning);
+  const r = RADICALS.find(x => x.meaning === meaning), mark = SITE_STATUS[meaning];
   $('existingNote').textContent = COVERED.has(meaning)
     ? `“${meaning}” already has ${IMG_COUNT[meaning]||0} image(s) in referents.json — yours ADD to it (maintainer merges the list).`
     : '';
   $('repNote').textContent = (r && !(r.representations||[]).includes('image'))
     ? `⚠ “${meaning}” isn't anchored by an image (representations: ${r.representations.join(', ')}) — better shown as ${r.representations.join('/')}. You probably don't need images here.`
+    : mark ? (mark.status === 'done'
+        ? `The editor has marked “${meaning}” done — it has enough images, so there's no need to add more.`
+        : `The editor has put “${meaning}” off until later — other referents first.`) + (mark.note ? ` (${mark.note})` : '')
     : '';
 }
 
@@ -696,20 +816,21 @@ function cardHasContent(c) {
   return isStr(c.source) || isStr(c.credit) || isStr(c.license) ||
          isStr(c.title) || isStr(c.notes) || isStr(c._preview);
 }
-// → true when the referent's image COUNT changed (the grid's "+N" badge needs a redraw)
+// → true when the referent's TILE changed — its "+N", or turning green — so the grid needs a redraw
 function stashCurrent() {
   const slug = $('slug').value.trim();
   if (!slug) return false;   // the disposable initial empty card has no slug — don't stash it
   const cards = [...document.querySelectorAll('#images .card')].map(cardData).filter(cardHasContent);
   const label = $('label').value.trim() || slug;
-  const prevN = (STASH[slug] || []).length;
+  const tile = () => (STASH[slug] || []).length + '|' + (readyCount(slug) >= ENOUGH);
+  const prevTile = tile();
   const before = STASH[slug] ? JSON.stringify([STASH[slug], LABELS[slug]]) : '';
   if (cards.length) {
     STASH[slug] = cards; LABELS[slug] = label;
     // only a real change dates it — merely opening a referent re-stashes identical cards
     if (JSON.stringify([cards, label]) !== before) TOUCHED[slug] = Date.now();
   } else { delete STASH[slug]; delete LABELS[slug]; delete TOUCHED[slug]; delete EXPORTED[slug]; }   // touched then emptied → forget it
-  return cards.length !== prevN;
+  return tile() !== prevTile;
 }
 
 // ── localStorage: persist the whole batch, restore it on return ──────────────
@@ -728,14 +849,20 @@ function flashSaved() {
   el.textContent = 'saved ✓'; el.classList.add('flash');
   clearTimeout(flashSaved._t); flashSaved._t = setTimeout(() => el.classList.remove('flash'), 700);
 }
+// ms of the newest "retrieved" day among some cards (local midnight), or 0
+function newestRetrieved(cards) {
+  const d = cards.map(c => c.retrieved).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')).sort().pop();
+  if (!d) return 0;
+  const [y, m, dd] = d.split('-').map(Number);
+  return new Date(y, m - 1, dd).getTime();
+}
 function restoreWork() {
   let blob; try { blob = JSON.parse(localStorage.getItem(WORK_KEY) || 'null'); } catch (e) { blob = null; }
   if (!blob || !blob.stash) return false;
   Object.assign(STASH, blob.stash); Object.assign(LABELS, blob.labels || {});
   Object.assign(TOUCHED, blob.touched || {}); Object.assign(EXPORTED, blob.exported || {});
   for (const s of Object.keys(STASH)) if (!TOUCHED[s]) {   // saved before edit-dates existed: date it by its newest "retrieved"
-    const d = STASH[s].map(c => c.retrieved).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')).sort().pop();
-    if (d) { const [y, m, dd] = d.split('-').map(Number); TOUCHED[s] = new Date(y, m - 1, dd).getTime(); }
+    const t = newestRetrieved(STASH[s]); if (t) TOUCHED[s] = t;
   }
   // saved before _download existed: recover it from the Openverse thumb. Once only — in a
   // v2 save a missing _download is deliberate (the source was edited away from the pick)
@@ -817,6 +944,12 @@ $('grid').addEventListener('click', e => {
   const chip = e.target.closest('.chip'); if (chip) selectRadical(chip.dataset.meaning);
 });
 $('filter').addEventListener('input', () => buildGrid($('filter').value));
+// hide dim tiles — a per-browser view preference, not work, so it lives outside the save
+try { $('hideDim').checked = localStorage.getItem('lp_hide_dim') === '1'; } catch (e) {}
+$('hideDim').addEventListener('change', () => {
+  try { localStorage.setItem('lp_hide_dim', $('hideDim').checked ? '1' : ''); } catch (e) {}
+  buildGrid($('filter').value);
+});
 
 // keep the notes in step if the slug is hand-edited (fallback / non-radical referents)
 $('slug').addEventListener('change', () => {
@@ -828,10 +961,14 @@ $('slug').addEventListener('change', () => {
 
 async function loadWorklist() {
   try {
-    const [kx, refs] = await Promise.all([
+    const [kx, refs, marks] = await Promise.all([
       fetch('../data/kangxi.json').then(r => { if (!r.ok) throw 0; return r.json(); }),
       fetch('../data/referents.json').then(r => { if (!r.ok) throw 0; return r.json(); }),
+      // optional: missing or unreadable → no marks, every image referent open
+      fetch('../data/sourcing-status.json').then(r => r.ok ? r.json() : {}).catch(() => ({})),
     ]);
+    SITE_STATUS = {};
+    for (const [k, v] of Object.entries(marks || {})) if (v && (v.status === 'done' || v.status === 'later')) SITE_STATUS[k] = v;
     RADICALS = kx.radicals || [];
     COVERED = new Set(Object.keys(refs));
     IMG_COUNT = {}; for (const [k,v] of Object.entries(refs)) IMG_COUNT[k] = (v.images||[]).length;
@@ -842,6 +979,7 @@ async function loadWorklist() {
       COLL_BY_KEY.get(key).add(k);
     }
     buildGrid();
+    updateNotes($('slug').value);   // a restored referent's notes need the collection + marks, which arrive only now
     render();   // the duplicate notes need the collection, which arrives after the first render
   } catch (e) {
     $('grid').innerHTML = '<p class="hint" style="padding:.4rem 0">couldn\'t load the radical worklist (data/ not reachable) — type a referent slug below by hand.</p>';

@@ -232,6 +232,12 @@ const licOf = name => LICENSES.find(l => l.label === name);
 // CORS-enabled; anonymous use is rate-limited (20/min, 200/day), which suits human-
 // paced curation — hand-sourcing stays the path for deeper hunts.
 const OPENVERSE_API = 'https://api.openverse.org/v1/images/';
+// Openverse is a single point of failure for suggestions (it serves its own harvested
+// index, not a live pass-through to Flickr/Commons). When its backend is down, requests
+// hang for a minute+ — so cap the wait and say plainly that hand-sourcing still works.
+const SUG_TIMEOUT_MS = 15000;
+const OV_DOWN = 'Openverse seems to be down right now — add images by hand below, or try the search again later.';
+class SugError extends Error {}   // an already-user-facing message; shown as-is
 const FREE_CODES = new Set(['by','by-sa','cc0','pdm']);
 // Openverse licence code + version → this page's dropdown label (else "(other)")
 function mapOvLicense(code, ver) {
@@ -637,7 +643,7 @@ async function loadWorklist() {
   }
 }
 
-// ── suggestions: query Commons, render a strip, click to pre-fill a card ──────
+// ── suggestions: query Openverse, render a strip, click to pre-fill a card ────
 let SUG_BUSY = false, SUG = [];
 async function runSuggest() {
   const q = $('sugQ').value.trim();
@@ -649,10 +655,19 @@ async function runSuggest() {
     const params = new URLSearchParams({
       q, license_type: 'commercial,modification', page_size: '20',   // 20 = the anonymous cap (higher → 401)
     });
-    const r = await fetch(OPENVERSE_API + '?' + params);
-    if (r.status === 429) throw new Error('search limit reached — Openverse allows 200 searches/day for anonymous use; hand-source for now, or try later');
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const d = await r.json();
+    let d;
+    try {
+      const r = await fetch(OPENVERSE_API + '?' + params, { signal: AbortSignal.timeout(SUG_TIMEOUT_MS) });
+      if (r.status === 429) throw new SugError('Openverse search limit reached (200 searches/day for anonymous use) — add images by hand below, or try again later.');
+      if (r.status >= 500) throw new SugError(OV_DOWN);
+      if (!r.ok) throw new SugError(`couldn’t search (HTTP ${r.status}) — you can still add images by hand below.`);
+      d = await r.json();
+    } catch (e) {
+      if (e instanceof SugError) throw e;
+      // timeout, or a network/CORS failure — an outage's error page usually lacks CORS
+      // headers, so a 5xx often surfaces here as a bare "Failed to fetch"
+      throw new SugError(OV_DOWN);
+    }
     const cands = [];
     for (const it of (d.results || [])) {
       if ((it.unstable__sensitivity || []).length) continue;   // Openverse's own sensitive flag (default already excludes these; guard anyway)
@@ -673,7 +688,8 @@ async function runSuggest() {
     SUG = cands; renderSuggest(q);
   } catch (e) {
     note.hidden = false; note.className = 'sug-note err';
-    note.textContent = `couldn’t search (${e.message}) — you can still add images by hand below.`;
+    note.textContent = e instanceof SugError ? e.message
+      : `couldn’t search (${e.message}) — you can still add images by hand below.`;
   } finally { SUG_BUSY = false; btn.textContent = bt; btn.disabled = false; }
 }
 function renderSuggest(q) {

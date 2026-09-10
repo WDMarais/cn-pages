@@ -55,7 +55,10 @@ along so the editor knows whose work is whose. The page remembers it next time.
 
 Your work saves automatically **in that browser** as you go, so you can close the tab
 and come back. When you're done — or want to hand in progress — one **export** button
-gives you a single file to send back.
+gives you a single file to send back. To hand in just part of it (say, today's
+referents), open **export a selection**, hit *edited today* (or tick them by hand), and
+export those. Each tile you've worked on shows a purple **+N** — the images you've saved
+on it.
 
 ---
 
@@ -183,7 +186,9 @@ honestly find 2 or 3 good ones, that's fine — quality beats hitting the number
   type** (see the type menu above — object vs broad vs action vs quality vs identity).
 - **Abstract / not-suitable** referents: flagged as such (per your sheet's
   instruction), not forced with a misleading image.
-- **Exported** — hit **export all** and send back the one file it produces.
+- **Exported** — hit **export all** (or **export a selection**) and send back the file it
+  produces. Re-sending a referent you've already handed in is fine — the editor's fold
+  skips images it already has.
 
 **Don't:** invent or guess a credit; use a non-free image "just this once"; add text
 overlays or edit images; paraphrase a license string; force a picture onto a referent

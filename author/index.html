@@ -100,8 +100,12 @@
   .chip .rep { font-size:13px; font-style:italic; color:var(--muted); line-height:1.1;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .chip .num { position:absolute; top:2px; left:4px; font-size:12px; color:var(--muted); }
-  .chip .cnt { position:absolute; top:2px; right:3px; font-size:12px; font-weight:700; color:#08121c;
-    background:var(--ok); border-radius:8px; padding:0 4px; }
+  .chip .badges { position:absolute; top:2px; right:3px; display:flex; gap:2px; }
+  .chip .cnt, .chip .mine { font-size:12px; font-weight:700; color:#08121c; border-radius:8px; padding:0 4px; }
+  .chip .cnt { background:var(--ok); }
+  /* +N = images YOU have saved here (purple, like the foot-bar); "+" because yours are
+     added to the committed count at merge */
+  .chip .mine { background:var(--accent2); }
   /* Informational, not instructional. green = HAS imagery (a fact: present, with a
      count). A plain chip = an image referent with none yet — the neutral baseline,
      deliberately unstyled so it reads as "nothing here" not "warning, act on this".
@@ -110,7 +114,7 @@
   .chip.has .g { color:var(--ok); }
   .chip.noimg { opacity:.45; border-style:dashed; }
   .chip.sel { outline:2px solid var(--accent); outline-offset:1px; border-color:var(--accent); opacity:1; }
-  /* wip = you have locally-saved, not-yet-exported work on this referent (purple foot-bar) */
+  /* wip = you have locally-saved work on this referent (purple foot-bar + "+N" badge) */
   .chip.wip { box-shadow: inset 0 -3px 0 var(--accent2); opacity:1; }
   .sw-wip { background:var(--accent2); }
   .saved-ind { font-size:11px; color:var(--muted); align-self:center; transition:color .2s; }
@@ -124,6 +128,19 @@
   .storagefill.danger { background:var(--err); }
   .storagewarn { color:var(--warn); margin:.35rem 0 0; font-size:11.5px; }
   .storagewarn.danger { color:var(--err); font-weight:600; }
+  /* export a selection — tick a subset of your saved referents */
+  .subset { margin:.5rem 0; }
+  .subset-quick { display:flex; flex-wrap:wrap; gap:.35rem; margin:.5rem 0 .4rem; }
+  .subset-list { max-height:15rem; overflow-y:auto; border:1px solid var(--line); border-radius:8px;
+    background:var(--field); padding:.25rem; }
+  label.subset-row { display:flex; align-items:center; gap:.5rem; padding:.22rem .4rem; border-radius:5px;
+    cursor:pointer; font-size:12.5px; margin:0; color:var(--ink); }
+  label.subset-row:hover { background:var(--panel2); }
+  .subset-row input { width:auto; margin:0; }
+  .subset-row .g { font-size:16px; width:1.4rem; text-align:center; }
+  .subset-row .s { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .subset-row .meta { color:var(--muted); font-size:11px; white-space:nowrap; }
+  .subset-row .exp { color:var(--ok); font-size:11px; white-space:nowrap; }
 </style>
 </head>
 <body>
@@ -190,6 +207,20 @@
     <span class="saved-ind" id="savedInd" title="Saved in this browser; restored when you return."></span>
   </div>
   <p class="hint">Exports everything you've done as one file (<b id="batchCount">0 referents</b>) — the maintainer folds it in one pass. Saved automatically <b>in this browser</b>; close the tab and return anytime (this device/browser only, not synced). <button class="btn sm danger" id="clearBtn" onclick="clearWork()">clear saved work</button></p>
+  <details class="subset">
+    <summary class="hint" style="cursor:pointer">export a selection <span id="subsetSummary"></span></summary>
+    <div class="subset-quick">
+      <button class="btn sm" onclick="subsetPick('today')">edited today</button>
+      <button class="btn sm" onclick="subsetPick('unexported')">not yet exported</button>
+      <button class="btn sm" onclick="subsetPick('all')">all</button>
+      <button class="btn sm" onclick="subsetPick('none')">none</button>
+    </div>
+    <div class="subset-list" id="subsetList"></div>
+    <div class="exportbar">
+      <button class="btn primary" id="exportSelBtn" onclick="exportSelected()">⬇ export selected</button>
+      <button class="btn" id="copySelBtn" onclick="copySelected()">copy selected</button>
+    </div>
+  </details>
 
   <div class="storagebox">
     <div class="storagebar-head"><span id="storageLabel">local storage: —</span><span id="storagePct"></span></div>
@@ -248,7 +279,8 @@ function mapOvLicense(code, ver) {
   return LICENSES.some(l => l.label === label) ? label : '(other — enter URL)';
 }
 const isStr = v => typeof v === 'string' && v.trim() !== '';
-const today = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const ymd = (d = new Date()) => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+const today = () => ymd();
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -409,17 +441,19 @@ function downloadJSON() { downloadBlob(($('slug').value.trim()||'referent')+'.js
 // The maintainer's fetch-referent-images.py already loops every top-level slug and
 // skips _contributor, so a multi-referent file folds in one pass — no per-referent
 // files needed. Preview URLs (never saved) are stripped here.
-function collectAll() {
+function collectAll(only) {   // only: optional Set of slugs → a subset submission
   stashCurrent();
   const o = {};
   const handle = $('contributor').value.trim();
   if (handle) o._contributor = handle;
   for (const slug of Object.keys(STASH).sort()) {
+    if (only && !only.has(slug)) continue;
     const images = STASH[slug].map(({_preview, ...im}) => im);
     o[slug] = { label: LABELS[slug] || slug, images };
   }
   return o;
 }
+const refsIn = o => Object.keys(o).filter(k => !k.startsWith('_'));
 function batchStats() {
   const refs = Object.keys(STASH);
   const imgs = refs.reduce((a,s)=>a + STASH[s].length, 0);
@@ -431,19 +465,78 @@ function refreshBatch() {
   const dis = refs === 0;
   const a = $('exportAllBtn'), b = $('copyAllBtn');
   if (a) a.disabled = dis; if (b) b.disabled = dis;
+  renderSubset();
 }
 function exportAll() {
   const o = collectAll();
-  if (!Object.keys(o).some(k=>!k.startsWith('_'))) { alert('Nothing saved yet — pick a radical and add an image.'); return; }
+  if (!refsIn(o).length) { alert('Nothing saved yet — pick a radical and add an image.'); return; }
   const handle = $('contributor').value.trim();
   downloadBlob(`imagery-${handle||'batch'}-${today()}.json`, JSON.stringify(o,null,2)+'\n');
+  markExported(o);
 }
 async function copyAll() {
   const o = collectAll();
-  if (!Object.keys(o).some(k=>!k.startsWith('_'))) { alert('Nothing saved yet — pick a radical and add an image.'); return; }
-  try { await navigator.clipboard.writeText(JSON.stringify(o,null,2)+'\n');
+  if (!refsIn(o).length) { alert('Nothing saved yet — pick a radical and add an image.'); return; }
+  try { await navigator.clipboard.writeText(JSON.stringify(o,null,2)+'\n'); markExported(o);
     const b=$('copyAllBtn'); const t=b.textContent; b.textContent='copied ✓'; setTimeout(()=>b.textContent=t,1200); }
   catch(e){ alert('clipboard blocked — use “export all” to download instead'); }
+}
+
+// ── export a selection: tick a subset of your saved referents ─────────────────
+// For handing work in piecemeal ("the 10 I did today"). TOUCHED / EXPORTED (slug →
+// ms, persisted with the stash) let the quick-picks answer "what did I edit today?"
+// and "what haven't I sent yet?" — a referent edited after its export counts as unsent.
+const SUBSET = new Set();
+const isExported = s => !!EXPORTED[s] && (!TOUCHED[s] || EXPORTED[s] >= TOUCHED[s]);
+const editedToday = s => !!TOUCHED[s] && ymd(new Date(TOUCHED[s])) === today();
+function renderSubset() {
+  const list = $('subsetList'); if (!list) return;
+  const slugs = Object.keys(STASH).sort();
+  for (const s of [...SUBSET]) if (!STASH[s]) SUBSET.delete(s);   // forget referents emptied since ticking
+  list.innerHTML = slugs.length ? slugs.map(s => {
+    const r = RADICALS.find(x => x.meaning === s);
+    const n = STASH[s].length;
+    const ed = !TOUCHED[s] ? '' : editedToday(s) ? ' · edited today' : ' · edited ' + ymd(new Date(TOUCHED[s]));
+    const ex = isExported(s) ? `<span class="exp" title="exported ${esc(ymd(new Date(EXPORTED[s])))}; no edits since">exported ✓</span>` : '';
+    return `<label class="subset-row"><input type="checkbox" data-slug="${esc(s)}"${SUBSET.has(s)?' checked':''}>
+      <span class="g">${r ? esc(r.glyph) : ''}</span><span class="s">${esc(LABELS[s] || s)}</span>
+      <span class="meta">${n} img${ed}</span>${ex}</label>`;
+  }).join('') : '<p class="hint" style="padding:.3rem .4rem">nothing saved yet.</p>';
+  const k = SUBSET.size;
+  $('subsetSummary').textContent = k ? `· ${k} ticked` : '';
+  $('exportSelBtn').textContent = `⬇ export selected${k ? ` (${k})` : ''}`;
+  $('exportSelBtn').disabled = $('copySelBtn').disabled = k === 0;
+}
+$('subsetList').addEventListener('change', e => {
+  const cb = e.target.closest('input[data-slug]'); if (!cb) return;
+  if (cb.checked) SUBSET.add(cb.dataset.slug); else SUBSET.delete(cb.dataset.slug);
+  renderSubset();
+});
+function subsetPick(mode) {   // quick-picks REPLACE the ticks
+  stashCurrent();
+  SUBSET.clear();
+  for (const s of Object.keys(STASH))
+    if (mode === 'all' || (mode === 'today' && editedToday(s)) || (mode === 'unexported' && !isExported(s))) SUBSET.add(s);
+  renderSubset();
+}
+function exportSelected() {
+  const o = collectAll(SUBSET), n = refsIn(o).length;
+  if (!n) return;
+  const handle = $('contributor').value.trim();
+  downloadBlob(`imagery-${handle||'batch'}-${today()}-${n}-referent${n===1?'':'s'}.json`, JSON.stringify(o,null,2)+'\n');
+  markExported(o);
+}
+async function copySelected() {
+  const o = collectAll(SUBSET);
+  if (!refsIn(o).length) return;
+  try { await navigator.clipboard.writeText(JSON.stringify(o,null,2)+'\n'); markExported(o);
+    const b=$('copySelBtn'); const t=b.textContent; b.textContent='copied ✓'; setTimeout(()=>b.textContent=t,1200); }
+  catch(e){ alert('clipboard blocked — use “export selected” to download instead'); }
+}
+function markExported(o) {
+  const now = Date.now();
+  for (const s of refsIn(o)) EXPORTED[s] = now;
+  persist();
 }
 
 function wire(root){ (root||document).querySelectorAll('input,select,textarea').forEach(el=>{
@@ -473,13 +566,16 @@ function buildGrid(q='') {
       const st = repState(r);
       const reps = r.representations || [];
       const cnt = st==='has' && IMG_COUNT[r.meaning] ? `<span class="cnt">${IMG_COUNT[r.meaning]}</span>` : '';
+      const mineN = (STASH[r.meaning] || []).length;   // images YOU have saved here
+      const mine = mineN ? `<span class="mine">+${mineN}</span>` : '';
       // on a non-image referent, print its actual modality so the dim chip is
       // informative ("this is a diagram/sound referent") rather than just "excluded"
       const rep = st==='noimg' ? `<div class="rep">${esc(reps.join('/'))}</div>` : '';
-      const wip = STASH[r.meaning] && STASH[r.meaning].length ? ' wip' : '';
+      const wip = mineN ? ' wip' : '';
+      const tip = (cnt ? ` · ${IMG_COUNT[r.meaning]} in the collection` : '') + (mineN ? ` · ${mineN} saved by you` : '');
       return `<div class="chip ${st}${r.meaning===sel?' sel':''}${wip}" data-meaning="${esc(r.meaning)}"
-        title="№${r.num} ${esc(r.meaning)} · ${esc(reps.join(', '))}${wip?' · your unexported work':''}">
-        <span class="num">${r.num}</span>${cnt}
+        title="№${r.num} ${esc(r.meaning)} · ${esc(reps.join(', '))}${tip}">
+        <span class="num">${r.num}</span>${cnt || mine ? `<span class="badges">${cnt}${mine}</span>` : ''}
         <div class="g">${esc(r.glyph)}</div><div class="m">${esc(r.meaning)}</div>${rep}</div>`;
     }).join('');
   $('grid').innerHTML = chips || '<p class="hint" style="padding:.4rem 0">no radical matches that filter.</p>';
@@ -489,7 +585,7 @@ function buildGrid(q='') {
     `<span><span class="swatch sw-has"></span>has imagery <b>${all.has}</b></span>`+
     `<span><span class="swatch sw-need"></span>image referent, none yet <b>${all.need}</b></span>`+
     `<span><span class="swatch sw-noimg"></span>not an image referent <b>${all.noimg}</b></span>`+
-    (wipN?`<span><span class="swatch sw-wip"></span>your unexported work <b>${wipN}</b></span>`:'');
+    (wipN?`<span><span class="swatch sw-wip"></span>your saved work <b>${wipN}</b> · purple <b>+N</b> = your images</span>`:'');
 }
 
 function updateNotes(meaning) {
@@ -511,6 +607,7 @@ function updateNotes(meaning) {
 // (WORK_KEY) so closing the tab and returning later restores the whole batch.
 const WORK_KEY = 'lp_author_work';
 const STASH = {}, LABELS = {};
+const TOUCHED = {}, EXPORTED = {};   // slug → ms of last real edit / last export (the export-a-selection quick-picks)
 function cardData(card) { return { ...imageOf(card), _preview: card.querySelector('.im-preview').value.trim() }; }
 // a card counts as "real work" only once it carries something the contributor typed —
 // the auto filename and today's date don't count, so blank cards never clutter the batch
@@ -518,20 +615,31 @@ function cardHasContent(c) {
   return isStr(c.source) || isStr(c.credit) || isStr(c.license) ||
          isStr(c.title) || isStr(c.notes) || isStr(c._preview);
 }
+// → true when the referent's image COUNT changed (the grid's "+N" badge needs a redraw)
 function stashCurrent() {
   const slug = $('slug').value.trim();
-  if (!slug) return;   // the disposable initial empty card has no slug — don't stash it
+  if (!slug) return false;   // the disposable initial empty card has no slug — don't stash it
   const cards = [...document.querySelectorAll('#images .card')].map(cardData).filter(cardHasContent);
-  if (cards.length) { STASH[slug] = cards; LABELS[slug] = $('label').value.trim() || slug; }
-  else { delete STASH[slug]; delete LABELS[slug]; }   // touched then emptied → forget it
+  const label = $('label').value.trim() || slug;
+  const prevN = (STASH[slug] || []).length;
+  const before = STASH[slug] ? JSON.stringify([STASH[slug], LABELS[slug]]) : '';
+  if (cards.length) {
+    STASH[slug] = cards; LABELS[slug] = label;
+    // only a real change dates it — merely opening a referent re-stashes identical cards
+    if (JSON.stringify([cards, label]) !== before) TOUCHED[slug] = Date.now();
+  } else { delete STASH[slug]; delete LABELS[slug]; delete TOUCHED[slug]; delete EXPORTED[slug]; }   // touched then emptied → forget it
+  return cards.length !== prevN;
 }
 
 // ── localStorage: persist the whole batch, restore it on return ──────────────
 let saveTimer = 0;
 function persist() {
-  stashCurrent();
-  const blob = { current: $('slug').value.trim(), label: $('label').value.trim(), stash: STASH, labels: LABELS };
+  const recount = stashCurrent();
+  const blob = { current: $('slug').value.trim(), label: $('label').value.trim(), stash: STASH, labels: LABELS,
+                 touched: TOUCHED, exported: EXPORTED };
   try { localStorage.setItem(WORK_KEY, JSON.stringify(blob)); flashSaved(); } catch (e) {}
+  if (recount && RADICALS.length) buildGrid($('filter').value);   // keep the "+N" badge / foot-bar live
+  refreshBatch();
 }
 function scheduleSave() { clearTimeout(saveTimer); saveTimer = setTimeout(persist, 400); }
 function flashSaved() {
@@ -543,6 +651,11 @@ function restoreWork() {
   let blob; try { blob = JSON.parse(localStorage.getItem(WORK_KEY) || 'null'); } catch (e) { blob = null; }
   if (!blob || !blob.stash) return false;
   Object.assign(STASH, blob.stash); Object.assign(LABELS, blob.labels || {});
+  Object.assign(TOUCHED, blob.touched || {}); Object.assign(EXPORTED, blob.exported || {});
+  for (const s of Object.keys(STASH)) if (!TOUCHED[s]) {   // saved before edit-dates existed: date it by its newest "retrieved"
+    const d = STASH[s].map(c => c.retrieved).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')).sort().pop();
+    if (d) { const [y, m, dd] = d.split('-').map(Number); TOUCHED[s] = new Date(y, m - 1, dd).getTime(); }
+  }
   const cur = blob.current;
   if (cur) {
     $('slug').value = cur; $('label').value = blob.label || LABELS[cur] || cur;
@@ -559,8 +672,8 @@ function clearWork() {
   const n = Object.keys(STASH).length;
   if (n && !confirm(`Clear all locally-saved work (${n} referent(s))? Anything not exported will be lost.`)) return;
   try { localStorage.removeItem(WORK_KEY); } catch (e) {}
-  for (const k in STASH) delete STASH[k];
-  for (const k in LABELS) delete LABELS[k];
+  for (const m of [STASH, LABELS, TOUCHED, EXPORTED]) for (const k in m) delete m[k];
+  SUBSET.clear();
   $('slug').value = ''; $('label').value = '';
   $('images').innerHTML = ''; addImage();
   updateNotes(''); buildGrid($('filter').value); render();

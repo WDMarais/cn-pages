@@ -13,7 +13,8 @@ more submission JSONs (or referents.json itself, to backfill missing files):
 
 For each image it resolves a fetchable URL, in order:
   1. `_download` — an explicit direct image URL, if the submission carries one
-     (the export-only preview field; only needed for non-Wikimedia sources).
+     (the linker sets it on search-picked non-Wikimedia images, e.g. Flickr).
+     Fetched as-is: no resize, same as any direct URL.
   2. `source` is a Wikimedia `File:` page  → the official Special:FilePath endpoint,
      fetched at a computed width so the SHORT edge lands at --short-edge (default
      800px, the general-spec minimum). ?width= alone would undershoot the short

@@ -295,9 +295,28 @@ function suggestFile(idx) {
   return `${slug}-${String(idx+1).padStart(2,'0')}.${ext}`;
 }
 
+// Where the maintainer's fetch-referent-images.py gets the BYTES for a search-picked
+// image. A Wikimedia File: page resolves (and resizes to 800px) on its own; anything
+// else — a Flickr/museum landing page — needs the direct image URL carried as
+// `_download`. Openverse hands Commons images an `index.php?curid=` link, not the
+// File: page, so we rebuild that from the upload URL (it's also the page that shows
+// the licence, which is what the brief asks for).
+const isWikiFilePage = s => /^https?:\/\/[^/]+\.(wikimedia|wikipedia)\.org\/wiki\/File:/i.test(s || '');
+function commonsFilePage(u) {
+  const m = /^https:\/\/upload\.wikimedia\.org\/wikipedia\/commons\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/?#]+)/.exec(u || '');
+  return m ? 'https://commons.wikimedia.org/wiki/File:' + m[1] : '';
+}
+// cards picked before `_download` existed kept only Openverse's thumbnail (as the
+// preview); its full_size variant serves the whole image, so restoreWork recovers the
+// link — once, for saves older than format 2
+const OV_THUMB = /^https:\/\/api\.openverse\.org\/v1\/images\/[0-9a-f-]{36}\/thumb\/$/i;
+const legacyDownload = v => OV_THUMB.test(v._preview || '') && !isWikiFilePage(v.source) ? v._preview + '?full_size=true' : '';
+
 function addImage(v={}) {
   const opts = LICENSES.map(l=>`<option ${v.license===l.label?'selected':''}>${l.label}</option>`).join('');
   const d = document.createElement('div'); d.className='card';
+  // the direct-bytes link rides along only while the card still points at the source it came with
+  d.dataset.download = v._download || ''; d.dataset.dlsrc = v.source || '';
   d.innerHTML = `
     <div class="card-head"><span class="n">image</span>
       <button class="btn sm danger" onclick="this.closest('.card').remove();renumber();render()">✕ remove</button></div>
@@ -368,9 +387,12 @@ function renumber() {
 function imageOf(card) {
   const q = s => card.querySelector(s).value.trim();
   // mirror mountain.json key order exactly; keep empty strings so merges are uniform
-  return { file:q('.im-file'), title:q('.im-title'), credit:q('.im-credit'),
-           license:q('.im-license'), license_url:q('.im-licurl'), source:q('.im-source'),
-           retrieved:q('.im-retrieved'), modified:q('.im-modified'), notes:q('.im-notes') };
+  const im = { file:q('.im-file'), title:q('.im-title'), credit:q('.im-credit'),
+               license:q('.im-license'), license_url:q('.im-licurl'), source:q('.im-source'),
+               retrieved:q('.im-retrieved'), modified:q('.im-modified'), notes:q('.im-notes') };
+  // export-only (the fold never copies it into referents.json); dropped once the source is edited away
+  if (card.dataset.download && im.source === card.dataset.dlsrc) im._download = card.dataset.download;
+  return im;
 }
 
 function collect() {
@@ -440,7 +462,8 @@ function downloadJSON() { downloadBlob(($('slug').value.trim()||'referent')+'.js
 // ── batch export: everything in the stash as ONE submission ──────────────────
 // The maintainer's fetch-referent-images.py already loops every top-level slug and
 // skips _contributor, so a multi-referent file folds in one pass — no per-referent
-// files needed. Preview URLs (never saved) are stripped here.
+// files needed. Preview URLs (never saved) are stripped here; `_download` stays — it's
+// how the maintainer fetch gets the bytes for non-Wikimedia images.
 function collectAll(only) {   // only: optional Set of slugs → a subset submission
   stashCurrent();
   const o = {};
@@ -635,8 +658,8 @@ function stashCurrent() {
 let saveTimer = 0;
 function persist() {
   const recount = stashCurrent();
-  const blob = { current: $('slug').value.trim(), label: $('label').value.trim(), stash: STASH, labels: LABELS,
-                 touched: TOUCHED, exported: EXPORTED };
+  const blob = { v: 2, current: $('slug').value.trim(), label: $('label').value.trim(), stash: STASH, labels: LABELS,
+                 touched: TOUCHED, exported: EXPORTED };   // v2 = cards carry their own _download
   try { localStorage.setItem(WORK_KEY, JSON.stringify(blob)); flashSaved(); } catch (e) {}
   if (recount && RADICALS.length) buildGrid($('filter').value);   // keep the "+N" badge / foot-bar live
   refreshBatch();
@@ -655,6 +678,11 @@ function restoreWork() {
   for (const s of Object.keys(STASH)) if (!TOUCHED[s]) {   // saved before edit-dates existed: date it by its newest "retrieved"
     const d = STASH[s].map(c => c.retrieved).filter(x => /^\d{4}-\d{2}-\d{2}$/.test(x || '')).sort().pop();
     if (d) { const [y, m, dd] = d.split('-').map(Number); TOUCHED[s] = new Date(y, m - 1, dd).getTime(); }
+  }
+  // saved before _download existed: recover it from the Openverse thumb. Once only — in a
+  // v2 save a missing _download is deliberate (the source was edited away from the pick)
+  if (!blob.v) for (const s of Object.keys(STASH)) for (const c of STASH[s]) {
+    if (!c._download) { const dl = legacyDownload(c); if (dl) c._download = dl; }
   }
   const cur = blob.current;
   if (cur) {
@@ -787,9 +815,11 @@ async function runSuggest() {
       const code = (it.license || '').toLowerCase();
       if (!FREE_CODES.has(code)) continue;   // belt-and-braces; the query already filters
       const mapped = mapOvLicense(code, it.license_version);
+      const filePage = commonsFilePage(it.url);   // Commons → its File: page (see isWikiFilePage)
       cands.push({
         title:       (it.title || '').trim(),
-        source:      it.foreign_landing_url || '',
+        source:      filePage || it.foreign_landing_url || '',
+        _download:   filePage ? '' : (it.url || ''),   // a File: page needs no direct link
         _preview:    it.thumbnail || it.url || '',
         credit:      (it.creator || '').trim(),
         license:     mapped,

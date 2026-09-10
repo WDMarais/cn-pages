@@ -32,6 +32,7 @@
   .grow0 { flex:0 0 auto !important; }
   .card { background:var(--panel2); border:1px solid var(--line); border-radius:8px;
     padding:.7rem .8rem; margin:.6rem 0; }
+  .card.dup { border-color:rgba(230,179,77,.55); }   /* soft duplicate note — .bad (below) wins */
   .card.bad { border-color:rgba(255,107,107,.5); }
   .card-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:.3rem; }
   .card-head .n { font-weight:600; color:var(--accent); }
@@ -80,6 +81,12 @@
   .sug.added::after { content:'added ✓'; position:absolute; inset:0; display:flex;
     align-items:center; justify-content:center; background:rgba(20,22,26,.72); color:var(--ok);
     font-weight:700; border-radius:8px; }
+  .sug.have { opacity:.45; cursor:default; }
+  .sug.have::after { content:'in the collection'; position:absolute; inset:0; display:flex;
+    align-items:center; justify-content:center; background:rgba(20,22,26,.72); color:var(--warn);
+    font-weight:700; border-radius:8px; }
+  .sug .also { font-size:10px; color:var(--warn); margin-top:.12rem; }
+  .sug .also:empty { display:none; }
   .sug-note { font-size:11.5px; color:var(--muted); margin:.4rem 0 0; }
   .sug-note.err { color:var(--warn); }
   /* worklist grid — the 214 radicals, shaded by imagery coverage */
@@ -312,6 +319,45 @@ function commonsFilePage(u) {
 const OV_THUMB = /^https:\/\/api\.openverse\.org\/v1\/images\/[0-9a-f-]{36}\/thumb\/$/i;
 const legacyDownload = v => OV_THUMB.test(v._preview || '') && !isWikiFilePage(v.source) ? v._preview + '?full_size=true' : '';
 
+// ── duplicate check: one KEY per image, however its URL is spelled ────────────
+// A Commons File: page, its upload URL, thumbs and Special:FilePath are one file; a
+// Flickr page and its staticflickr image are one photo id. Anything else keys on
+// host+path+query. A miss is fine (it's only a soft note); a false match isn't, which
+// is why unknown URLs keep their query.
+function srcKey(u) {
+  u = (u || '').trim(); if (!u) return '';
+  let p; try { p = new URL(u); } catch (e) { return u; }
+  const host = p.hostname.toLowerCase().replace(/^(www|m)\./, '');
+  const dec = s => { try { return decodeURIComponent(s); } catch (e) { return s; } };
+  if (/(^|\.)(wikimedia|wikipedia)\.org$/.test(host)) {
+    const f = /\/wiki\/(?:File|Image):([^/]+)$/i.exec(p.pathname)
+           || /\/wiki\/Special:FilePath\/([^/]+)$/i.exec(p.pathname)
+           || /^\/wikipedia\/[^/]+\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/.exec(p.pathname);
+    const t = /^(?:File|Image):(.+)$/i.exec(p.searchParams.get('title') || '');
+    const name = (f ? dec(f[1]) : t ? t[1] : '').replace(/ /g, '_');
+    if (name) return 'wm:' + name[0].toUpperCase() + name.slice(1);   // MediaWiki capitalises the first letter
+  }
+  if (host === 'flickr.com') { const m = /^\/photos\/[^/]+\/(\d+)/.exec(p.pathname); if (m) return 'flickr:' + m[1]; }
+  if (/(^|\.)staticflickr\.com$/.test(host)) { const m = /\/(\d+)_[0-9a-f]+(?:_[a-z0-9]+)?\.\w+$/i.exec(p.pathname); if (m) return 'flickr:' + m[1]; }
+  return 'url:' + host + p.pathname.replace(/\/+$/, '') + p.search;
+}
+const imgKeys = im => [...new Set([srcKey(im.source), srcKey(im._download)].filter(Boolean))];
+// key → Set(slug) over your saved work, every referent as last stashed
+function stashIndex() {
+  const m = new Map();
+  for (const [s, cards] of Object.entries(STASH)) for (const c of cards) for (const k of imgKeys(c)) {
+    if (!m.has(k)) m.set(k, new Set());
+    m.get(k).add(s);
+  }
+  return m;
+}
+// the OTHER referents (collection + your saved work) already carrying any of these keys
+function otherSlugs(keys, slug, sIdx = stashIndex()) {
+  const out = new Set();
+  for (const k of keys) for (const m of [COLL_BY_KEY, sIdx]) for (const s of (m.get(k) || [])) if (s !== slug) out.add(s);
+  return [...out].sort();
+}
+
 function addImage(v={}) {
   const opts = LICENSES.map(l=>`<option ${v.license===l.label?'selected':''}>${l.label}</option>`).join('');
   const d = document.createElement('div'); d.className='card';
@@ -425,7 +471,18 @@ function validate(slug, ref, images) {
     if (!isStr(im.title)) W.push(`image ${i+1}: no title (recommended)`);
     if (cardBad) bad.add(i);
   });
-  return { E, W, bad };
+  // duplicates — soft notes, never errors (see srcKey)
+  const dup = new Set(), seen = new Map(), sIdx = stashIndex();
+  images.forEach((im, i) => {
+    const ks = imgKeys(im); if (!ks.length) return;
+    const j = ks.map(k => seen.get(k)).find(x => x !== undefined);
+    if (j !== undefined) { W.push(`image ${i+1}: same image as image ${j+1}`); dup.add(i); }
+    ks.forEach(k => { if (!seen.has(k)) seen.set(k, i); });
+    if (ks.some(k => COLL_BY_KEY.get(k)?.has(slug))) { W.push(`image ${i+1}: already in the collection for “${slug}” — no need to add it again`); dup.add(i); }
+    const others = otherSlugs(ks, slug, sIdx);
+    if (others.length) W.push(`image ${i+1}: also on ${others.map(s => `“${s}”`).join(', ')} — fine if that's deliberate`);
+  });
+  return { E, W, bad, dup };
 }
 
 let LAST = {};
@@ -434,8 +491,8 @@ function render() {
   const ref = o[slug || '<slug>'];
   $('fname').textContent = (slug || 'referent') + '.json';
   $('json').textContent = JSON.stringify(o, null, 2);
-  const { E, W, bad } = validate(slug, ref, ref.images);
-  [...document.querySelectorAll('#images .card')].forEach((c,i)=>c.classList.toggle('bad', bad.has(i)));
+  const { E, W, bad, dup } = validate(slug, ref, ref.images);
+  [...document.querySelectorAll('#images .card')].forEach((c,i)=>{ c.classList.toggle('bad', bad.has(i)); c.classList.toggle('dup', dup.has(i)); });
   const st = $('status');
   if (E.length) { st.className='status err'; st.textContent = `✗ ${E.length} error(s) — attribution/license incomplete`; }
   else { st.className='status ok'; st.textContent = `✓ license metadata complete (${W.length} note(s))`; }
@@ -444,7 +501,7 @@ function render() {
     ...W.map(m=>`<li class="warn"><span class="tag">note</span><span>${esc(m)}</span></li>`),
   ].join('');
   $('copyBtn').disabled = E.length>0;
-  scheduleSave(); refreshBatch(); updateStorageMeter();
+  scheduleSave(); refreshBatch(); updateStorageMeter(); markSug();
 }
 
 async function copyJSON() {
@@ -574,6 +631,7 @@ $('slug').addEventListener('input', () => { renumber(); });
 // grid is always live — no hardcoded slug list to drift. data/kangxi.json is the
 // 214 spine + `representations`; data/referents.json is the imagery already held.
 let RADICALS = [], COVERED = new Set(), IMG_COUNT = {};
+let COLL_BY_KEY = new Map();   // srcKey → Set(slug): images already in referents.json (the duplicate check)
 
 function repState(r) {                        // → 'has' | 'need' | 'noimg'
   if (!r.representations || !r.representations.includes('image')) return 'noimg';
@@ -777,7 +835,14 @@ async function loadWorklist() {
     RADICALS = kx.radicals || [];
     COVERED = new Set(Object.keys(refs));
     IMG_COUNT = {}; for (const [k,v] of Object.entries(refs)) IMG_COUNT[k] = (v.images||[]).length;
+    COLL_BY_KEY = new Map();
+    for (const [k,v] of Object.entries(refs)) for (const im of (v.images||[])) {
+      const key = srcKey(im.source); if (!key) continue;
+      if (!COLL_BY_KEY.has(key)) COLL_BY_KEY.set(key, new Set());
+      COLL_BY_KEY.get(key).add(k);
+    }
     buildGrid();
+    render();   // the duplicate notes need the collection, which arrives after the first render
   } catch (e) {
     $('grid').innerHTML = '<p class="hint" style="padding:.4rem 0">couldn\'t load the radical worklist (data/ not reachable) — type a referent slug below by hand.</p>';
     $('legend').innerHTML = '';
@@ -848,17 +913,36 @@ function renderSuggest(q) {
       <img loading="lazy" src="${esc(c._preview)}" alt="">
       <div class="lic">${esc(c.license)}${c._from ? ` · ${esc(c._from)}` : ''}</div>
       <div class="cap">${esc(c.title)}</div>
+      <div class="also"></div>
     </div>`).join('');
+  markSug();
+}
+// grey out results already on this referent (one of its cards, or the collection);
+// tag ones already on another referent. Re-run on every render, so removing a card
+// makes its result clickable again.
+function markSug() {
+  const els = document.querySelectorAll('.sug'); if (!els.length) return;
+  const slug = $('slug').value.trim();
+  const mine = new Set([...document.querySelectorAll('#images .card')].flatMap(c => imgKeys(imageOf(c))));
+  const sIdx = stashIndex();
+  els.forEach(el => {
+    const c = SUG[+el.dataset.i]; if (!c) return;
+    const ks = imgKeys(c);
+    const added = ks.some(k => mine.has(k));
+    el.classList.toggle('added', added);
+    el.classList.toggle('have', !added && ks.some(k => COLL_BY_KEY.get(k)?.has(slug)));
+    const others = otherSlugs(ks, slug, sIdx);
+    el.querySelector('.also').textContent = others.length ? 'also on ' + others.join(', ') : '';
+  });
 }
 function acceptSuggest(i) {
   const c = SUG[i]; if (!c) return;
   if (!$('slug').value.trim()) { alert('Pick a radical (or type a slug) first, so the image has a referent to attach to.'); return; }
   const { license_raw, _from, ...v } = c;   // display-only fields, not card fields
-  addImage(v);
-  const el = document.querySelector(`.sug[data-i="${i}"]`); if (el) el.classList.add('added');
+  addImage(v);   // its render() → markSug() marks the result "added ✓"
 }
 $('sugResults').addEventListener('click', e => {
-  const s = e.target.closest('.sug'); if (s && !s.classList.contains('added')) acceptSuggest(+s.dataset.i);
+  const s = e.target.closest('.sug'); if (s && !s.matches('.added, .have')) acceptSuggest(+s.dataset.i);
 });
 $('sugQ').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); runSuggest(); } });
 

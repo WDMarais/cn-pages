@@ -71,8 +71,9 @@ on it.
    free, safe-for-work candidates appears — via Openverse, which searches Flickr,
    Wikimedia Commons, museums and more. Only commercially-reusable licences are shown and
    mature content is excluded at the source. Click any one to drop it in as a card,
-   pre-filled with its credit and licence. Treat these as a **starting point**, not the
-   answer.
+   pre-filled with its credit and licence. Ones already on that referent — or already in
+   the collection — are greyed out. Treat these as a **starting point**, not the answer.
+   *(If you add the same image twice, even under a different link, a yellow note says so.)*
 
 3. **Do the real sourcing yourself** — this is where the value is; your own searches
    turn up better, more varied images than the default query. Good CC/PD sources:
